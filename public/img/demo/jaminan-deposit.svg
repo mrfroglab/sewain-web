@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 800">
+  <rect width="800" height="800" fill="#e7e7e7"/>
+  <g transform="rotate(3 400 400)">
+    <rect x="170" y="250" width="460" height="300" rx="18" fill="#fff" stroke="#d6d6d6" stroke-width="2"/>
+    <path d="M170 268 L400 420 L630 268" fill="none" stroke="#d6d6d6" stroke-width="3"/>
+    <rect x="300" y="430" width="200" height="70" rx="12" fill="#171717"/>
+    <text x="400" y="475" text-anchor="middle" font-family="Arial, sans-serif" font-size="26" font-weight="700" fill="#fff">DEPOSIT</text>
+  </g>
+  <text x="400" y="680" text-anchor="middle" font-family="Arial, sans-serif" font-size="22" fill="#777">Foto jaminan · uang deposit dalam amplop</text>
+</svg>
