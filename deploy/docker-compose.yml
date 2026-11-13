@@ -1,0 +1,15 @@
+# Stack Sewain di server ini: /opt/stacks/apps/sewain
+# Disalin oleh deploy/deploy.sh. Prototipe FE saja: tidak ada database/rahasia (data demo disimpan di browser).
+services:
+  web:
+    image: ghcr.io/mrfroglab/sewain-web:latest
+    container_name: sewain-web
+    restart: unless-stopped
+    environment:
+      NODE_ENV: production
+    mem_limit: 512m
+    networks: [gateway-net]
+
+networks:
+  gateway-net:
+    external: true
