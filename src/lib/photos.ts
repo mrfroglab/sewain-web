@@ -6,6 +6,7 @@
 
 import { createStore, get as idbGet, set as idbSet } from "idb-keyval";
 import { useEffect, useState } from "react";
+import { isOnline, registerDemoPhoto, resolveMediaUrl, uploadPhoto } from "./api";
 import { sha256Blob } from "./sha256";
 import { useAppStore } from "./store";
 import type { ID, PhotoRecord, PhotoSource, PhotoStage } from "./types";
@@ -58,9 +59,20 @@ export interface SavePhotoInput {
   maxSide?: number;
 }
 
-/** Compress → hash → store blob in IndexedDB → register metadata in the app store. */
+/** KTP & selfie never leave the browser in the prototype (PRD §7.2: foto eKYC simulasi tidak disimpan di server). */
+const LOCAL_ONLY_STAGES: PhotoStage[] = ["ktp", "selfie"];
+
+/**
+ * Compress → (server mode) upload: sewain-api computes SHA-256 over the received bytes and stamps the server time
+ * (FR-P2/P3/P7) → register metadata. Offline: hash in the browser and keep the blob in IndexedDB.
+ */
 export async function savePhoto(input: SavePhotoInput): Promise<PhotoRecord> {
   const { blob, width, height } = await compressImage(input.blob, input.maxSide ?? 1600);
+  if (isOnline() && !LOCAL_ONLY_STAGES.includes(input.stage)) {
+    const record = await uploadPhoto<PhotoRecord>(blob, { stage: input.stage, bookingId: input.bookingId, angle: input.angle, source: input.source, width, height });
+    useAppStore.getState().addPhotos([record]);
+    return record;
+  }
   const id = newId();
   const sha256 = await sha256Blob(blob);
   await idbSet(id, blob, db());
@@ -84,6 +96,11 @@ export async function savePhoto(input: SavePhotoInput): Promise<PhotoRecord> {
 
 /** "Pakai foto contoh (demo)": registers a bundled image as evidence, hashed from its real bytes. */
 export async function saveDemoPhoto(url: string, meta: Omit<SavePhotoInput, "blob" | "source">): Promise<PhotoRecord> {
+  if (isOnline() && !LOCAL_ONLY_STAGES.includes(meta.stage) && url.startsWith("/img/")) {
+    const record = await registerDemoPhoto<PhotoRecord>(url, { stage: meta.stage, bookingId: meta.bookingId, angle: meta.angle });
+    useAppStore.getState().addPhotos([record]);
+    return record;
+  }
   const res = await fetch(url);
   const blob = await res.blob();
   const record: PhotoRecord = {
@@ -105,14 +122,14 @@ export async function saveDemoPhoto(url: string, meta: Omit<SavePhotoInput, "blo
 /** Resolve a photo src ("/img/..." or "idb:<id>") to something an <img> can show. undefined while loading; null if missing. */
 export function usePhotoSrc(src?: string): string | null | undefined {
   const isIdb = !!src?.startsWith("idb:");
-  const [url, setUrl] = useState<string | null | undefined>(isIdb ? undefined : src);
+  const [url, setUrl] = useState<string | null | undefined>(isIdb ? undefined : src && resolveMediaUrl(src));
   useEffect(() => {
     if (!src) {
       setUrl(null);
       return;
     }
     if (!src.startsWith("idb:")) {
-      setUrl(src);
+      setUrl(resolveMediaUrl(src));
       return;
     }
     let objectUrl: string | null = null;

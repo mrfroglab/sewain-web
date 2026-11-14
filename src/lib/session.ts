@@ -6,6 +6,7 @@
 
 import { create } from "zustand";
 import { createJSONStorage, persist } from "zustand/middleware";
+import { demoLogin, isOnline, setTokenProvider } from "./api";
 import { useAppStore } from "./store";
 import type { User } from "./types";
 
@@ -13,6 +14,9 @@ const LAST_KEY = "sewain-last-user";
 
 interface SessionState {
   userId: string | null;
+  /** API session token for userId (sewain-api, DEMO_MODE login). */
+  token: string | null;
+  tokenFor: string | null;
   hydrated: boolean;
   signIn: (userId: string) => void;
   signOut: () => void;
@@ -22,15 +26,18 @@ export const useSession = create<SessionState>()(
   persist(
     (set) => ({
       userId: null,
+      token: null,
+      tokenFor: null,
       hydrated: false,
       signIn: (userId) => {
-        set({ userId });
+        set({ userId, token: null, tokenFor: null });
+        if (isOnline()) void ensureToken();
         try {
           localStorage.setItem(LAST_KEY, userId);
         } catch {}
       },
       signOut: () => {
-        set({ userId: null });
+        set({ userId: null, token: null, tokenFor: null });
         try {
           localStorage.removeItem(LAST_KEY);
         } catch {}
@@ -40,10 +47,29 @@ export const useSession = create<SessionState>()(
       name: "sewain-session",
       storage: createJSONStorage(() => sessionStorage),
       skipHydration: true,
-      partialize: (s) => ({ userId: s.userId }),
+      partialize: (s) => ({ userId: s.userId, token: s.token, tokenFor: s.tokenFor }),
     },
   ),
 );
+
+let tokenRequest: Promise<string | null> | null = null;
+
+/** Token for the signed-in user; logs in through the API (queued after pending commands) when missing. */
+async function ensureToken(): Promise<string | null> {
+  const { userId, token, tokenFor } = useSession.getState();
+  if (!userId) return null;
+  if (token && tokenFor === userId) return token;
+  if (!tokenRequest) {
+    tokenRequest = demoLogin(userId).then((t) => {
+      if (t && useSession.getState().userId === userId) useSession.setState({ token: t, tokenFor: userId });
+      return t;
+    });
+    void tokenRequest.finally(() => (tokenRequest = null));
+  }
+  return tokenRequest;
+}
+
+setTokenProvider(ensureToken);
 
 export async function bootSession() {
   await useSession.persist.rehydrate();

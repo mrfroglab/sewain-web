@@ -19,6 +19,7 @@ import { FilterBar } from "./FilterBar";
 import { FilterSheet } from "./FilterSheet";
 import { ResultsMap } from "./ResultsMap";
 import { useSearchState, type FilterKey } from "./searchParams";
+import { useServerSearch } from "./useServerSearch";
 
 /** /cari — reads its state from the URL; must be rendered inside <Suspense> (useSearchParams). */
 export function SearchView() {
@@ -39,7 +40,14 @@ function SearchContent() {
   const locLabel = useSearchLabel();
 
   const { search } = data;
-  const result = useMemo(() => searchListings(data, filters, now), [data, filters, now]);
+  const local = useMemo(() => searchListings(data, filters, now), [data, filters, now]);
+  // Server mode: membership + distance come from PostGIS; sorting, ratings and the date filter stay local.
+  const server = useServerSearch(filters, search);
+  const result = useMemo(() => {
+    if (!server) return local;
+    const dist = new Map(server.hits.map((h) => [h.id, h.distanceKm]));
+    return { ...local, hits: local.hits.filter((h) => dist.has(h.listing.id)).map((h) => ({ ...h, distanceKm: dist.get(h.listing.id)! })), hiddenByProviderReach: server.hiddenByProviderReach };
+  }, [local, server]);
   const nextRadius = RADIUS_OPTIONS.find((r) => r > search.radiusKm);
   const nextRadiusCount = useMemo(
     () => (nextRadius && result.hits.length === 0 ? searchListings(data, filters, now, { ...search, radiusKm: nextRadius }).hits.length : 0),
@@ -105,6 +113,7 @@ function SearchContent() {
           </span>
         </p>
       )}
+      {server && <p className="mt-2 text-micro text-ash">Dihitung server dengan PostGIS: jarak ≤ radius pencarian dan ≤ radius jangkauan penyedia.</p>}
 
       <div className="mt-5">
         {count === 0 ? (

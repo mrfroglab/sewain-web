@@ -3,6 +3,7 @@
 import { Clock, FastForward, FlaskConical, RotateCcw, Users } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
+import { useApiStatus } from "@/lib/api";
 import { formatDateTime } from "@/lib/format";
 import { STATUS_LABEL, publicName } from "@/lib/selectors";
 import { useCurrentUser, useReady, useSession } from "@/lib/session";
@@ -45,6 +46,7 @@ export function DemoDock() {
   const resetDemo = useAppStore((s) => s.resetDemo);
   const bookings = useAppStore((s) => s.bookings);
   const now = useNow(10_000);
+  const api = useApiStatus((s) => s.status);
   useEffect(() => {
     const onOpen = () => setOpen(true);
     window.addEventListener("sewain:demo", onOpen);
@@ -75,11 +77,27 @@ export function DemoDock() {
         {offset > 0 && <span className="rounded-control bg-ink px-1.5 py-0.5 text-[9px] text-white">+{Math.round(offset / H)}j</span>}
       </button>
       <Sheet open={open} onClose={() => setOpen(false)} title="Mode demo" description="Alat bantu presentasi. OTP, eKYC, dan pembayaran disimulasikan; data tersimpan di browser ini." size="lg">
+        <div className="mb-5 flex items-start gap-2.5 rounded-[12px] border border-border-gray p-3 text-caption">
+          <span className={cn("mt-1 size-2 shrink-0 rounded-full", api === "online" ? "bg-ink" : "bg-ash")} aria-hidden />
+          <span className="text-graphite">
+            {api === "online" ? (
+              <>
+                <b className="text-ink">Tersambung ke server</b> (Go + PostGIS). Semua perangkat melihat data yang sama secara realtime: penyewa, penyedia, dan admin boleh beda HP.
+              </>
+            ) : api === "connecting" ? (
+              "Menghubungkan ke server…"
+            ) : (
+              <>
+                <b className="text-ink">Mode offline</b>: server tidak terjangkau, data disimpan di browser ini saja (sinkron antar tab).
+              </>
+            )}
+          </span>
+        </div>
         <section>
           <p className="mb-2 flex items-center gap-2 text-body-sm font-semibold">
             <Users className="size-4" /> Ganti akun
           </p>
-          <p className="mb-3 text-caption text-smoke">Tips: buka dua jendela, satu sebagai penyewa dan satu sebagai penyedia. Data tersinkron otomatis.</p>
+          <p className="mb-3 text-caption text-smoke">Tips: buka di dua perangkat atau dua jendela, satu sebagai penyewa dan satu sebagai penyedia. Data tersinkron otomatis.</p>
           <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
             {demoUsers.map((u) => (
               <button
@@ -146,7 +164,7 @@ export function DemoDock() {
 
         <section className="mt-6 rounded-[12px] bg-soft-gray p-3.5">
           <p className="text-body-sm font-semibold">Reset data demo</p>
-          <p className="mt-0.5 text-caption text-smoke">Kembalikan semua listing, booking, chat, dan pengaturan ke kondisi awal.</p>
+          <p className="mt-0.5 text-caption text-smoke">Kembalikan semua listing, booking, chat, dan pengaturan ke kondisi awal{api === "online" ? " untuk semua perangkat" : ""}.</p>
           <Button
             variant="danger"
             size="sm"

@@ -1,6 +1,44 @@
-# Stack Sewain di server ini: /opt/stacks/apps/sewain
-# Disalin oleh deploy/deploy.sh. Prototipe FE saja: tidak ada database/rahasia (data demo disimpan di browser).
+# Stack Sewain di server ini: /opt/stacks/apps/sewain  (db + api + web, jaringan gateway-net)
+# Sumber yang sama ada di sewain-api/deploy dan sewain-web/deploy. Rahasia di .env (izin 600, hanya di server).
 services:
+  db:
+    image: postgis/postgis:16-3.4-alpine
+    container_name: sewain-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: sewain
+      POSTGRES_PASSWORD: ${DB_PASSWORD}
+      POSTGRES_DB: sewain
+    volumes:
+      - ./data/postgres:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U sewain -d sewain"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+    mem_limit: 512m
+    networks: [gateway-net]
+
+  api:
+    image: ghcr.io/mrfroglab/sewain-api:latest
+    container_name: sewain-api
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      PORT: "8080"
+      APP_ENV: demo
+      DEMO_MODE: "true"
+      DATABASE_URL: postgres://sewain:${DB_PASSWORD}@sewain-db:5432/sewain?sslmode=disable
+      UPLOAD_DIR: /data/uploads
+      WEB_ORIGIN: http://sewain-web:3000
+      CORS_ORIGINS: https://sewain.hallojanu.me
+    volumes:
+      - ./data/uploads:/data/uploads
+    mem_limit: 256m
+    networks: [gateway-net]
+
   web:
     image: ghcr.io/mrfroglab/sewain-web:latest
     container_name: sewain-web

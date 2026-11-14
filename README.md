@@ -12,7 +12,15 @@ Next.js 16 (App Router) · React 19 · Tailwind CSS v4 · TypeScript · zustand 
 
 ## Cara kerja prototipe
 
-Belum ada backend. Seluruh "server" disimulasikan di browser:
+Web ini terhubung ke [`sewain-api`](https://github.com/mrfroglab/sewain-api) (Go + Postgres/PostGIS) di `/api`:
+
+- Saat API bisa dijangkau, server jadi sumber data tunggal. Setiap aksi diterapkan dulu di browser (UI instan), lalu
+  dikirim ke server untuk divalidasi dan disimpan. Server mengirim event perubahan lewat WebSocket, sehingga semua
+  perangkat (penyewa, penyedia, admin) tersinkron.
+- Foto bukti di-upload; hash SHA-256 dan timestamp dihitung server. Halaman `/cari` memakai query radius dua arah PostGIS.
+- Kalau API tidak terjangkau, web otomatis berjalan **offline** dengan data di browser (cadangan saat demo).
+
+Logika domain yang sama juga ada di browser (dipakai untuk UI instan dan mode offline):
 
 - `src/lib/store.ts` menjalankan semua alur PRD §7.2 sungguhan: state machine booking (REQUESTED → … → COMPLETED,
   termasuk EXPIRED, OVERDUE, DISPUTED, RESOLVED), kesepakatan sewa ber-hash SHA-256, jaminan, komisi, sengketa L1–L3,
@@ -38,7 +46,8 @@ pnpm lint         # oxlint
 pnpm build && pnpm start
 ```
 
-Environment variable (lihat `.env.example`): `NEXT_PUBLIC_SITE_URL` (opsional, default `https://sewain.hallojanu.me`).
+Environment variable (lihat `.env.example`): `NEXT_PUBLIC_SITE_URL` (opsional, default `https://sewain.hallojanu.me`),
+`NEXT_PUBLIC_API_URL` (opsional; kosong = API di origin yang sama `/api`, isi `http://localhost:8080` untuk dev lokal).
 
 ## Struktur
 
@@ -55,5 +64,6 @@ deploy/             docker-compose + deploy.sh untuk /opt/stacks/apps/sewain
 ## Deploy
 
 Push ke `main` → GitHub Actions: typecheck, lint, build → image `ghcr.io/mrfroglab/sewain-web` → runner self-hosted
-menarik image dan me-restart container `sewain-web` di `/opt/stacks/apps/sewain` (Caddy + Cloudflare Tunnel di depannya).
+menarik image dan me-restart container `sewain-web` di `/opt/stacks/apps/sewain` (stack db + api + web; Caddy meneruskan
+`/api/*` ke `sewain-api`).
 Setup awal atau darurat: `deploy/deploy.sh` (atau `BUILD_LOCAL=1 deploy/deploy.sh` tanpa GHCR).

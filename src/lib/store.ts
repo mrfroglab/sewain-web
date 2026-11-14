@@ -13,7 +13,9 @@ import { CATEGORY_BY_ID } from "./data/categories";
 import { DATA_VERSION, createSeed } from "./data/seed";
 import { endOfDay, firstName, isoDate, rupiah } from "./format";
 import { collateralValue, computeCommission, depositCash, describeCollateral, quoteRent } from "./pricing";
+import { connectEvents, detectApi, fetchState, isOnline, pendingCommands, postAction, useApiStatus } from "./api";
 import { sha256Text } from "./sha256";
+import { toast } from "./toast";
 import type {
   AccountType,
   AppNotification,
@@ -917,19 +919,132 @@ export const useAppStore = create<AppState>()(
 
 /* ------------------------------------------------------------ hydration */
 
+/* ------------------------------------------------------- server sync (sewain-api) */
+
+/** Actions that change data on the server. Everything else is client-only (search prefs, demo helpers). */
+const SERVER_ACTIONS = [
+  "registerUser", "updateUser", "submitVerification", "reviewVerification", "createListing", "updateListing", "setListingStatus",
+  "toggleFavorite", "createBooking", "acceptBooking", "declineBooking", "cancelBooking", "payBooking", "submitCheckout",
+  "addCheckoutPhotos", "agreeCheckout", "rejectAtCheckout", "submitCheckin", "returnCollateral", "confirmCollateral", "submitReview",
+  "sendMessage", "markThreadRead", "openDispute", "proposeSolution", "respondProposal", "escalateDispute", "adminRecommend",
+  "resolveDispute", "createReport", "resolveReport", "addStrike", "setUserStatus", "updateCommission", "updateCollateralRules",
+  "setBannedKeywords", "createWanted", "offerWanted", "closeWanted", "markNotificationsRead", "advanceClock", "resetClock", "resetDemo",
+] as const satisfies readonly (keyof Actions)[];
+
+type ServerState = DataState & { serverNow: number };
+
+let localVersion = 0;
+let syncing: Promise<void> | null = null;
+let resyncWanted = false;
+
+/** Replace local data with the server snapshot (keeps client-only search prefs). */
+function applyServerState(s: ServerState) {
+  const data: Partial<DataState> = {};
+  for (const key of Object.keys(EMPTY) as (keyof DataState)[]) {
+    if (key === "search") continue;
+    if (key in s) (data as Record<string, unknown>)[key] = (s as unknown as Record<string, unknown>)[key];
+  }
+  localVersion = s.version;
+  // Demo clock follows the server: its offset plus the skew between the two clocks.
+  data.clockOffset = s.clockOffset + (s.serverNow - Date.now());
+  data.seeded = true;
+  useAppStore.setState(data);
+  useApiStatus.setState({ lastSync: Date.now() });
+}
+
+/** Fetch the latest snapshot, but never while our own commands are in flight (avoids flicker back to old state). */
+async function syncFromServer(force = false): Promise<void> {
+  if (pendingCommands() > 0) {
+    resyncWanted = true;
+    return;
+  }
+  if (syncing) {
+    resyncWanted = true;
+    return syncing;
+  }
+  syncing = (async () => {
+    const s = await fetchState<ServerState>();
+    if (s && (force || s.version !== localVersion)) applyServerState(s);
+  })().finally(() => {
+    syncing = null;
+    if (resyncWanted) {
+      resyncWanted = false;
+      void syncFromServer();
+    }
+  });
+  return syncing;
+}
+
+let depth = 0;
+
+/** Wrap each data action: apply locally (instant UI, same validation) → send to the server → reconcile. */
+function installServerSync() {
+  const state = useAppStore.getState();
+  const wrapped: Partial<Actions> = {};
+  for (const name of SERVER_ACTIONS) {
+    const local = state[name] as (...args: unknown[]) => unknown;
+    (wrapped as Record<string, unknown>)[name] = (...args: unknown[]) => {
+      // Nested calls (e.g. createBooking → auto acceptBooking) are part of the outer action on the server too.
+      if (!isOnline() || depth > 0) return local(...args);
+      depth++;
+      let res: unknown;
+      try {
+        res = local(...args);
+      } finally {
+        depth--;
+      }
+      const r = res as { ok?: boolean; value?: unknown } | undefined;
+      if (r && r.ok === false) return res; // rejected locally, nothing to send
+      void postAction(name, args, r?.value).then((resp) => {
+        if (!resp.ok) toast(`Server: ${resp.error ?? "aksi ditolak"}`, "error");
+        void syncFromServer(!resp.ok);
+      });
+      return res;
+    };
+  }
+  // The server runs the time-based jobs; locally the clock only drives countdowns.
+  const localTick = state.tick;
+  wrapped.tick = () => {
+    if (!isOnline()) localTick();
+  };
+  useAppStore.setState(wrapped);
+}
+
 let booted = false;
 
-/** Called once from <StoreBoot/>: rehydrate, seed on first visit, keep tabs in sync, run the clock. */
+/**
+ * Called once from <StoreBoot/>. Loads cached browser data instantly, then connects to sewain-api:
+ * server snapshot + WebSocket change feed (multi-device). Falls back to browser-only mode when the API is down.
+ */
 export async function bootStore() {
   if (booted || typeof window === "undefined") return;
   booted = true;
   await useAppStore.persist.rehydrate();
-  if (!useAppStore.getState().seeded) useAppStore.getState().resetDemo();
+  const online = await detectApi();
+  if (online) {
+    const s = await fetchState<ServerState>();
+    if (s) {
+      applyServerState(s);
+      useApiStatus.setState({ status: "online" });
+      installServerSync();
+      connectEvents(
+        (version) => {
+          if (version !== localVersion) void syncFromServer();
+        },
+        () => void syncFromServer(),
+      );
+      document.addEventListener("visibilitychange", () => document.visibilityState === "visible" && void syncFromServer());
+    }
+  }
+  if (!isOnline()) {
+    useApiStatus.setState({ status: "offline" });
+    if (!useAppStore.getState().seeded) useAppStore.getState().resetDemo();
+    window.addEventListener("storage", (e) => {
+      if (e.key === STORAGE_KEY) void useAppStore.persist.rehydrate();
+    });
+  }
   useAppStore.setState({ hydrated: true });
   useAppStore.getState().tick();
-  window.addEventListener("storage", (e) => {
-    if (e.key === STORAGE_KEY) void useAppStore.persist.rehydrate();
-  });
   window.setInterval(() => useAppStore.getState().tick(), 30_000);
 }
 
