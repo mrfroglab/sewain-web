@@ -2,7 +2,7 @@
 
 import { Clock, FastForward, FlaskConical, RotateCcw, Users } from "lucide-react";
 import { useRouter } from "next/navigation";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { formatDateTime } from "@/lib/format";
 import { STATUS_LABEL, publicName } from "@/lib/selectors";
 import { useCurrentUser, useReady, useSession } from "@/lib/session";
@@ -28,6 +28,9 @@ const JUMPS: { status: BookingStatus | "OVERDUE"; bookingId: string; as: string;
   { status: "RESOLVED", bookingId: "b-resolved", as: "u-sinta", note: "Hasil sengketa action cam" },
 ];
 
+/** Open the demo panel from anywhere (the mobile header has a small flask button). */
+export const openDemoPanel = () => window.dispatchEvent(new Event("sewain:demo"));
+
 /** Floating "Mode demo" control: switch account, fast-forward the clock, jump to a status, reset data. */
 export function DemoDock() {
   const ready = useReady();
@@ -42,6 +45,11 @@ export function DemoDock() {
   const resetDemo = useAppStore((s) => s.resetDemo);
   const bookings = useAppStore((s) => s.bookings);
   const now = useNow(10_000);
+  useEffect(() => {
+    const onOpen = () => setOpen(true);
+    window.addEventListener("sewain:demo", onOpen);
+    return () => window.removeEventListener("sewain:demo", onOpen);
+  }, []);
   if (!ready) return null;
   const demoUsers = users.filter((u) => u.demo);
 
@@ -58,12 +66,12 @@ export function DemoDock() {
       <button
         type="button"
         onClick={() => setOpen(true)}
-        className="fixed bottom-[calc(var(--tabbar-h)+env(safe-area-inset-bottom)+12px)] left-3 z-[550] inline-flex h-9 items-center gap-1.5 rounded-control bg-white px-3 text-caption font-semibold text-ink shadow-floating ring-1 ring-black/5 lg:bottom-5 lg:left-5"
+        className="fixed bottom-5 left-5 z-[550] hidden h-9 items-center gap-1.5 rounded-control bg-white px-3 text-caption font-semibold text-ink shadow-floating ring-1 ring-black/5 lg:inline-flex"
         aria-label="Buka panel mode demo"
       >
         <FlaskConical className="size-4" />
         Demo
-        {user && <span className="hidden max-w-20 truncate font-normal text-smoke sm:inline">· {publicName(user)}</span>}
+        {user && <span className="max-w-20 truncate font-normal text-smoke">· {publicName(user)}</span>}
         {offset > 0 && <span className="rounded-control bg-ink px-1.5 py-0.5 text-[9px] text-white">+{Math.round(offset / H)}j</span>}
       </button>
       <Sheet open={open} onClose={() => setOpen(false)} title="Mode demo" description="Alat bantu presentasi. OTP, eKYC, dan pembayaran disimulasikan; data tersimpan di browser ini." size="lg">

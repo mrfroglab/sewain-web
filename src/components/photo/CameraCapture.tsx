@@ -59,11 +59,15 @@ export function CameraCapture({
       .then((stream) => {
         if (cancelled) return stream.getTracks().forEach((t) => t.stop());
         streamRef.current = stream;
-        if (video.current) {
-          video.current.srcObject = stream;
-          void video.current.play().catch(() => {});
-        }
-        setStatus("live");
+        const v = video.current;
+        if (!v) return;
+        // Only enable the shutter once real frames arrive (videoWidth > 0); otherwise the first tap is lost.
+        const ready = () => !cancelled && v.videoWidth > 0 && setStatus("live");
+        v.onloadeddata = ready;
+        v.onplaying = ready;
+        v.srcObject = stream;
+        void v.play().catch(() => {});
+        ready();
       })
       .catch(() => !cancelled && setStatus("denied"));
     return () => {
@@ -87,9 +91,13 @@ export function CameraCapture({
     onClose();
   };
 
-  const shoot = () => {
+  const shoot = (attempt = 0) => {
     const v = video.current;
-    if (!v || !v.videoWidth) return;
+    if (!v) return;
+    if (!v.videoWidth) {
+      if (attempt < 10) window.setTimeout(() => shoot(attempt + 1), 100);
+      return;
+    }
     const canvas = document.createElement("canvas");
     canvas.width = v.videoWidth;
     canvas.height = v.videoHeight;
@@ -147,7 +155,7 @@ export function CameraCapture({
       </div>
 
       <div className="relative mx-auto flex w-full max-w-3xl flex-1 items-center justify-center overflow-hidden">
-        <video ref={video} playsInline muted className={cn("absolute inset-0 size-full object-cover", mode === "user" && "-scale-x-100", status !== "live" && "hidden")} />
+        <video ref={video} playsInline muted autoPlay className={cn("absolute inset-0 size-full object-cover", mode === "user" && "-scale-x-100", status !== "live" && "opacity-0")} />
         {flash && <div className="absolute inset-0 bg-white/80" />}
         {status === "live" && frame === "ktp" && (
           <div className="pointer-events-none absolute inset-0 grid place-items-center p-6">
@@ -198,7 +206,7 @@ export function CameraCapture({
         <div className="flex justify-center">
           <button
             type="button"
-            onClick={shoot}
+            onClick={() => shoot()}
             disabled={status !== "live"}
             aria-label="Ambil foto"
             className="grid size-[72px] place-items-center rounded-full border-4 border-white/90 disabled:opacity-30"

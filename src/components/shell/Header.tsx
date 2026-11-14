@@ -1,6 +1,6 @@
 "use client";
 
-import { Bell, ChevronDown, Menu, MapPin, MessageCircle, Search, ShoppingBag } from "lucide-react";
+import { Bell, ChevronDown, FlaskConical, Menu, MapPin, MessageCircle, Search, ShoppingBag } from "lucide-react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useState } from "react";
@@ -13,6 +13,7 @@ import { Avatar } from "../ui/Avatar";
 import { cn } from "../ui/cn";
 import { Logo } from "../ui/Logo";
 import { PillLink, pillClass } from "../ui/Pill";
+import { openDemoPanel } from "./DemoDock";
 import { LocationSheet, useSearchLabel } from "./LocationSheet";
 import { MenuDrawer } from "./MenuDrawer";
 
@@ -79,6 +80,11 @@ export function Header() {
             <button type="button" onClick={() => setMenu(true)} aria-label="Buka menu" className="-ml-2 grid size-9 place-items-center rounded-full hover:bg-soft-gray">
               <Menu className="size-5" />
             </button>
+            {ready && (
+              <button type="button" onClick={openDemoPanel} aria-label="Mode demo: ganti akun, percepat waktu" className="-ml-3 grid size-9 place-items-center rounded-full text-graphite hover:bg-soft-gray lg:hidden">
+                <FlaskConical className="size-[18px]" />
+              </button>
+            )}
             <nav className="hidden items-center gap-5 text-nav font-medium text-graphite lg:flex" aria-label="Utama">
               <Link href="/cari" className={cn("hover:text-ink", path.startsWith("/cari") && "text-ink")}>Cari barang</Link>
               <Link href="/papan" className={cn("hover:text-ink", path.startsWith("/papan") && "text-ink")}>Papan permintaan</Link>
