@@ -202,10 +202,8 @@ async function restoreCookieSession(): Promise<void> {
     return;
   }
   if (r.status === 401) {
-    if (useSession.getState().userId) {
-      useSession.setState({ userId: null, transport: "demo", token: null, tokenFor: null });
-      clearLast();
-    }
+    // Signed in here, but the cookie session is gone (expired, revoked from another device): back to /masuk?next=.
+    if (useSession.getState().userId) return sessionExpired();
     setIncludeCredentials(false);
   }
   // status 0 (offline) or other errors: keep the local session, the next request will tell.

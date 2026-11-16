@@ -53,6 +53,7 @@ async function request<T>(path: string, init: RequestInit = {}, auth = false, ti
   if (init.body && !(init.body instanceof FormData)) headers.set("Content-Type", "application/json");
   const res = await fetch(apiUrl(path), { ...init, headers, cache: "no-store", credentials: credentialsMode(), signal: AbortSignal.timeout(timeoutMs) });
   const body = (await res.json().catch(() => ({ ok: false, error: `HTTP ${res.status}` }))) as T & { error?: string };
+  if (res.status === 401 && auth) unauthorizedHandler();
   if (!res.ok && !(body && typeof body === "object" && "ok" in body)) throw new Error(body?.error ?? `HTTP ${res.status}`);
   return body as T;
 }
@@ -69,7 +70,9 @@ export async function detectApi(): Promise<boolean> {
 /** Snapshot for the signed-in user of this tab (v2 scopes it per viewer; v1 ignores the token). */
 export async function fetchState<T>(): Promise<T | null> {
   try {
-    return await request<T>("/api/v1/state", {}, true);
+    const s = await request<T & { ok?: boolean }>("/api/v1/state", {}, true);
+    // An error body (401 expired session, 5xx) is not a snapshot.
+    return s && typeof s === "object" && s.ok !== false ? s : null;
   } catch {
     return null;
   }

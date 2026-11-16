@@ -94,7 +94,8 @@ function MasukFlow({ next, startSwitching }: { next: string | null; startSwitchi
   };
 
   const onRegistered = (userId: string) => {
-    signIn(userId);
+    // Real OTP accounts are already signed in (bearer/cookie session); only the demo registration signs in here.
+    if (useSession.getState().userId !== userId) signIn(userId);
     toast("Akun dibuat! Satu langkah lagi: verifikasi KTP.", "success");
     leave(`/verifikasi${next ? `?next=${encodeURIComponent(next)}` : ""}`);
   };
