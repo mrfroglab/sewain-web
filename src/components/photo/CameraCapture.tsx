@@ -2,6 +2,7 @@
 
 import { Camera, ImagePlus, RefreshCw, Sparkles, X } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
+import { useAppConfig } from "@/lib/config";
 import { Button } from "../ui/Button";
 import { cn } from "../ui/cn";
 
@@ -21,7 +22,7 @@ export function CameraCapture({
   frame = "none",
   facing = "environment",
   multiple = true,
-  demoSources = [],
+  demoSources: demoSourcesProp = [],
 }: {
   open: boolean;
   onClose: () => void;
@@ -33,6 +34,9 @@ export function CameraCapture({
   multiple?: boolean;
   demoSources?: string[];
 }) {
+  // "Foto contoh" only exists on demo servers (POST /api/v1/photos/demo is DEMO_MODE-only in v2).
+  const demoMode = useAppConfig((s) => s.demoMode);
+  const demoSources = demoMode ? demoSourcesProp : [];
   const video = useRef<HTMLVideoElement>(null);
   const streamRef = useRef<MediaStream | null>(null);
   const fileInput = useRef<HTMLInputElement>(null);

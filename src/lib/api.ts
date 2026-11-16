@@ -82,8 +82,15 @@ export async function demoLogin(userId: string): Promise<string | null> {
   try {
     // Not queued: it is also called from inside queued commands (token refresh). A failed early login
     // (e.g. right after registering, before the server has the user) is simply retried on the next command.
-    const r = await request<{ ok: boolean; token?: string }>("/api/v1/auth/demo-login", { method: "POST", body: JSON.stringify({ userId }) });
-    return r.ok ? r.token ?? null : null;
+    // A rate-limited login (429, e.g. many personas/tabs at once on staging) would leave the tab on the guest
+    // snapshot: wait as the server asks (capped) and try again.
+    for (let attempt = 0; ; attempt++) {
+      const r = await request<{ ok: boolean; token?: string; retryAfter?: number; error?: string }>("/api/v1/auth/demo-login", { method: "POST", body: JSON.stringify({ userId }) });
+      if (r.ok) return r.token ?? null;
+      const wait = r.retryAfter ?? (/(\d+) detik/.exec(r.error ?? "")?.[1] ? Number(/(\d+) detik/.exec(r.error ?? "")![1]) : 0);
+      if (!wait || attempt >= 2) return null;
+      await new Promise((ok) => setTimeout(ok, Math.min(wait, 15) * 1000 + 250));
+    }
   } catch {
     return null;
   }
