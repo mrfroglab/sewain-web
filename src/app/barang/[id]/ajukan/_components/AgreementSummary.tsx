@@ -10,6 +10,7 @@ import { HANDOVER_LABEL } from "@/lib/data/categories";
 import { formatDate, rupiah } from "@/lib/format";
 import { collateralValue, computeCommission, depositCash, describeCommission } from "@/lib/pricing";
 import { providerLabel, publicName } from "@/lib/selectors";
+import { usePaymentMode } from "@/lib/config";
 import { useAppStore } from "@/lib/store";
 import type { CollateralOption, HandoverMethod, Listing, RentQuote, User } from "@/lib/types";
 
@@ -71,6 +72,7 @@ export function AgreementSummary({
   onSubmit: () => void;
 }) {
   const commissionCfg = useAppStore((s) => s.commission);
+  const paymentMode = usePaymentMode();
   const commission = quote ? computeCommission(quote.total, commissionCfg) : null;
   const deposit = collateral ? depositCash(collateral, listing.itemValue) : 0;
   const colValue = collateral ? collateralValue(collateral, listing.itemValue) : 0;
@@ -175,8 +177,9 @@ export function AgreementSummary({
             <p className="text-[22px] font-bold leading-none tracking-[-0.5px] text-ink">{rupiah(total)}</p>
           </div>
           <p className="mt-2 text-caption text-smoke">
-            Belum bayar sekarang. Setelah disetujui, bayar ke penyedia saat serah terima atau lewat “Bayar via Sewain” (simulasi). Jangan transfer sebelum barang di
-            tangan.
+            {paymentMode === "simulated"
+              ? "Belum bayar sekarang. Setelah disetujui, bayar ke penyedia saat serah terima atau lewat “Bayar via Sewain” (simulasi). Jangan transfer sebelum barang di tangan."
+              : "Belum bayar sekarang. Bayar langsung ke penyedia setelah barang di tangan dan sudah kamu cek. Jangan transfer sebelum ketemu."}
           </p>
         </div>
       ) : null}

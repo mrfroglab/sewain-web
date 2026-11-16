@@ -41,6 +41,8 @@ function DetailBody({ id }: { id: string }) {
       bookings: s.bookings,
       disputes: s.disputes,
       search: s.search,
+      scope: s.scope,
+      viewerId: s.viewerId,
       collateralRules: s.collateralRules,
     })),
   );

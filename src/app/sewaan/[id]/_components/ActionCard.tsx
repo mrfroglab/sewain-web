@@ -2,6 +2,7 @@
 
 import { Eye } from "lucide-react";
 import { cn } from "@/components/ui/cn";
+import { usePaymentMode } from "@/lib/config";
 import { nextAction } from "@/lib/selectors";
 import { useAppStore } from "@/lib/store";
 import { AcceptedActions } from "./AcceptedActions";
@@ -16,7 +17,8 @@ import type { BookingView } from "./shared";
 /** "Langkah berikutnya" — the status × role driven card where the whole demo happens. */
 export function ActionCard({ view, className }: { view: BookingView; className?: string }) {
   const { b, role, user } = view;
-  const needsMe = useAppStore((s) => (role === "admin" ? null : nextAction(b, user.id, s.reviews)));
+  const paymentMode = usePaymentMode();
+  const needsMe = useAppStore((s) => (role === "admin" ? null : nextAction(b, user.id, s.reviews, paymentMode)));
 
   let body;
   switch (b.status) {

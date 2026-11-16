@@ -48,6 +48,7 @@ export const PAYMENT_METHOD_LABEL: Record<PaymentMethod, string> = {
   qris: "QRIS",
   va: "Virtual account",
   ewallet: "E-wallet",
+  langsung: "Bayar langsung ke penyedia",
   tunai: "Tunai di tempat",
 };
 

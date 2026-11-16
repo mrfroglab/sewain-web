@@ -102,7 +102,7 @@ export function ReportCard({
                     <Link href={`/admin/pengguna?u=${targetUser.id}`} className="font-medium text-ink underline-offset-2 hover:underline">
                       {targetUser.name}
                     </Link>
-                    {targetUser.strikes > 0 && ` · ${targetUser.strikes} strike`}
+                    {(targetUser.strikes ?? 0) > 0 && ` · ${(targetUser.strikes ?? 0)} strike`}
                   </>
                 )}
               </p>
@@ -121,7 +121,7 @@ export function ReportCard({
               )}
               {targetUser && (
                 <p className="mt-0.5 text-caption text-smoke">
-                  <span className={cn(targetUser.status !== "aktif" && "font-semibold text-ink")}>{USER_STATUS_LABEL[targetUser.status]}</span> · {targetUser.strikes} strike
+                  <span className={cn(targetUser.status !== "aktif" && "font-semibold text-ink")}>{USER_STATUS_LABEL[targetUser.status]}</span> · {(targetUser.strikes ?? 0)} strike
                 </p>
               )}
             </div>

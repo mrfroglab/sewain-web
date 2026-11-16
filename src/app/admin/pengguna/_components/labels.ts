@@ -21,7 +21,7 @@ export const LADDER = ["Aktif", "Strike", "Suspend", "Blacklist NIK"] as const;
 export function ladderStep(u: Pick<User, "status" | "strikes">): number {
   if (u.status === "blacklist") return 3;
   if (u.status === "suspend") return 2;
-  return u.strikes > 0 ? 1 : 0;
+  return (u.strikes ?? 0) > 0 ? 1 : 0;
 }
 
 export const accountLabel = (u: User) => (u.accountType === "toko" ? `Toko${u.store ? ` · ${u.store.name}` : ""}` : "Individu");

@@ -23,7 +23,8 @@ export interface User {
   id: ID;
   name: string; // nama lengkap (hanya pemilik akun & admin yang melihat)
   nickname?: string; // nama panggilan publik, mis. "Bu Tini" (default: nama depan)
-  phone: string;
+  /** Only the account owner and admins receive it in a scoped snapshot (v2). */
+  phone?: string;
   email?: string;
   role: UserRole;
   accountType: AccountType;
@@ -40,13 +41,23 @@ export interface User {
   earlyLender?: boolean;
   bio?: string;
   joinedAt: number;
-  strikes: number;
+  /** Private in a scoped snapshot (own profile + admin only). */
+  strikes?: number;
   status: UserStatus;
   /** seeded historic reputation; live reviews are added on top */
   baseRating?: number;
   baseRatingCount?: number;
   /** Demo accounts appear in the quick account switcher. */
   demo?: { label: string; persona: string };
+  /** Server-computed public aggregates (v2 scoped snapshot), since they depend on other people's bookings. */
+  publicStats?: PublicStats;
+}
+
+export interface PublicStats {
+  completedRentals: number;
+  disputes: number;
+  trustScore: number;
+  strikes?: number;
 }
 
 export interface VerificationRequest {
@@ -266,7 +277,8 @@ export interface Agreement {
   providerAgreedAt?: number;
 }
 
-export type PaymentMethod = "qris" | "va" | "ewallet" | "tunai";
+/** "langsung" = paid directly to the provider outside Sewain (payment mode "offline", pilot). */
+export type PaymentMethod = "qris" | "va" | "ewallet" | "tunai" | "langsung";
 
 export interface PaymentInfo {
   status: "belum" | "lunas";
@@ -388,6 +400,8 @@ export interface Review {
   rating: number; // 1–5
   comment: string;
   createdAt: number;
+  /** v2: when the review became public (FR-T2). Preferred over the client-side rule when present. */
+  visibleAt?: number;
 }
 
 /* ------------------------------------------------- reports, disputes, admin */
@@ -554,4 +568,21 @@ export interface DataState {
   chatReads: Record<string, number>;
   search: SearchPrefs;
   bookingCounter: number;
+  /**
+   * "full" = v1 snapshot with everyone's data (demo). "scoped" = v2 snapshot limited to what this viewer may see
+   * (ROADMAP §4): aggregates over other people's data must then come from the server, never be computed locally.
+   */
+  scope: SnapshotScope;
+  viewerId: ID | null;
+  /** v2: busy date ranges per listing (other people's bookings, without who). See docs/v2-api-needs.md #5. */
+  listingBusy?: Record<ID, BusyRange[]>;
+}
+
+export type SnapshotScope = "full" | "scoped";
+
+export interface BusyRange {
+  start: string;
+  end: string;
+  /** units taken (stock-aware) */
+  count: number;
 }

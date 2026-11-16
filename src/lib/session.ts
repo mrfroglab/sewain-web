@@ -7,7 +7,7 @@
 import { create } from "zustand";
 import { createJSONStorage, persist } from "zustand/middleware";
 import { demoLogin, isOnline, setTokenProvider } from "./api";
-import { useAppStore } from "./store";
+import { resyncForViewer, setSessionBridge, useAppStore } from "./store";
 import type { User } from "./types";
 
 const LAST_KEY = "sewain-last-user";
@@ -35,12 +35,15 @@ export const useSession = create<SessionState>()(
         try {
           localStorage.setItem(LAST_KEY, userId);
         } catch {}
+        // A scoped (v2) snapshot belongs to one viewer: fetch the one for the new account.
+        resyncForViewer();
       },
       signOut: () => {
         set({ userId: null, token: null, tokenFor: null });
         try {
           localStorage.removeItem(LAST_KEY);
         } catch {}
+        resyncForViewer();
       },
     }),
     {
@@ -70,6 +73,28 @@ async function ensureToken(): Promise<string | null> {
 }
 
 setTokenProvider(ensureToken);
+
+/** Tokens of other accounts on this device (demo: the persona switcher), for actions still queued under them. */
+const otherTokens = new Map<string, string>();
+
+async function tokenForUser(userId: string): Promise<string | null> {
+  if (userId === useSession.getState().userId) return ensureToken();
+  const cached = otherTokens.get(userId);
+  if (cached) return cached;
+  // Only works on a DEMO_MODE server; elsewhere the entry waits until that account signs in on this device again.
+  const t = await demoLogin(userId);
+  if (t) otherTokens.set(userId, t);
+  return t;
+}
+
+setSessionBridge({
+  currentUserId: () => useSession.getState().userId,
+  tokenFor: tokenForUser,
+  dropToken: (userId) => {
+    otherTokens.delete(userId);
+    if (useSession.getState().tokenFor === userId) useSession.setState({ token: null, tokenFor: null });
+  },
+});
 
 export async function bootSession() {
   await useSession.persist.rehydrate();

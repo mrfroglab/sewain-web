@@ -7,6 +7,7 @@ import { Notice } from "@/components/ui/Layout";
 import { formatDate, rupiah } from "@/lib/format";
 import { publicName } from "@/lib/selectors";
 import { ActionButtons, ActionHead, CtaLink, InfoLine } from "./ActionBits";
+import { RenterPaymentLink } from "./PaymentMode";
 import { PaymentSheet } from "./PaymentSheet";
 import { daysUntilReturn, lateInfo, otherParty, returnLabel, type BookingView } from "./shared";
 
@@ -73,11 +74,7 @@ export function ActiveActions({ view }: { view: BookingView }) {
         </ActionButtons>
       )}
 
-      {role === "penyewa" && b.payment.status === "belum" && (
-        <button type="button" onClick={() => setPaying(true)} className="mt-3 min-h-9 text-body-sm font-medium text-ink underline underline-offset-4">
-          Bayar via Sewain (simulasi) · {rupiah(b.payment.total)}
-        </button>
-      )}
+      {role === "penyewa" && <RenterPaymentLink view={view} onPay={() => setPaying(true)} />}
       <PaymentSheet open={paying} onClose={() => setPaying(false)} view={view} />
     </>
   );

@@ -6,7 +6,7 @@ const COLS = [
   { title: "Sewain", links: [["Cara kerja", "/bantuan#cara-kerja"], ["Cari barang", "/cari"], ["Papan permintaan", "/papan"], ["Sewakan barang", "/penyedia"]] },
   { title: "Bantuan", links: [["Jaminan & deposit", "/bantuan#jaminan"], ["Foto bukti kondisi", "/bantuan#foto-bukti"], ["Penyelesaian sengketa", "/bantuan#sengketa"], ["Tips anti-penipuan", "/bantuan#aman"]] },
   { title: "FAQ", links: [["Kenapa verifikasi KTP?", "/bantuan#verifikasi"], ["Berapa komisinya?", "/bantuan#komisi"], ["Barang yang dilarang", "/bantuan#larangan"], ["Sewa kendaraan", "/bantuan#kendaraan"]] },
-  { title: "Sumber", links: [["Syarat & ketentuan", "/bantuan#syarat"], ["Kebijakan privasi", "/bantuan#privasi"], ["Akun demo", "/masuk"], ["Panel admin", "/admin"]] },
+  { title: "Sumber", links: [["Syarat & ketentuan", "/syarat"], ["Kebijakan privasi", "/privasi"], ["Akun demo", "/masuk"], ["Panel admin", "/admin"]] },
 ] as const;
 
 function InstagramMark() {

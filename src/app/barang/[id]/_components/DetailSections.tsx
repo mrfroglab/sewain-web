@@ -4,6 +4,7 @@ import { AlertTriangle, Bike, ChevronDown, ShieldAlert } from "lucide-react";
 import Link from "next/link";
 import type { ReactNode } from "react";
 import { Notice } from "@/components/ui/Layout";
+import { usePaymentMode } from "@/lib/config";
 import { HANDOVER_LABEL, RISK_NOTES } from "@/lib/data/categories";
 import { formatDate, rupiah } from "@/lib/format";
 import { collateralValue, describeCollateral } from "@/lib/pricing";
@@ -51,6 +52,7 @@ export function durationText(listing: Listing): string {
 
 /** "Aturan penyedia" — everything the renter must know BEFORE requesting (PRD 8.1 step 3, 9.3). */
 export function ProviderRules({ listing, owner }: { listing: Listing; owner?: User }) {
+  const paymentMode = usePaymentMode();
   const cap = Math.round((listing.itemValue * listing.rules.lateFeeCapPercent) / 100);
   const hasDocument = listing.collateralOptions.some((o) => o.kind === "identitas" || o.withIdentity || o.kind === "custom");
   return (
@@ -91,7 +93,9 @@ export function ProviderRules({ listing, owner }: { listing: Listing; owner?: Us
       )}
       <Row label="Persetujuan">{approvalText(listing)}</Row>
       <Row label="Pembayaran">
-        Bayar langsung ke penyedia saat serah terima, atau lewat “Bayar via Sewain” (simulasi) setelah disetujui.
+        {paymentMode === "simulated"
+          ? "Bayar langsung ke penyedia saat serah terima, atau lewat “Bayar via Sewain” (simulasi) setelah disetujui."
+          : "Bayar langsung ke penyedia setelah barang di tangan. Tidak ada pembayaran di aplikasi selama pilot."}
         <span className="block text-caption text-smoke">Info pembayaran penyedia baru muncul setelah request disetujui.</span>
       </Row>
     </dl>
@@ -156,9 +160,10 @@ export function VehicleInfoBlock({ vehicle, today }: { vehicle: VehicleInfo; tod
 
 /** PRD 12.1 anti-fraud reminder. */
 export function AntiFraudNotice() {
+  const paymentMode = usePaymentMode();
   return (
     <Notice tone="ink" icon={<ShieldAlert className="size-4" />} title="Jangan transfer sebelum barang di tangan">
-      Bayar setelah ketemu langsung dan barang sudah kamu cek, atau lewat Sewain. Ada yang minta DP/transfer duluan lewat WhatsApp? Itu tanda bahaya, laporkan.
+      Bayar setelah ketemu langsung dan barang sudah kamu cek{paymentMode === "simulated" ? ", atau lewat Sewain" : ""}. Ada yang minta DP/transfer duluan lewat WhatsApp? Itu tanda bahaya, laporkan.
       Chat di Sewain jadi bukti kalau nanti ada sengketa.{" "}
       <Link href="/bantuan#aman" className="font-medium text-white underline underline-offset-2">
         Tips aman menyewa

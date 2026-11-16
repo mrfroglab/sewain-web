@@ -13,7 +13,10 @@ import { CATEGORY_BY_ID } from "./data/categories";
 import { DATA_VERSION, createSeed } from "./data/seed";
 import { endOfDay, firstName, isoDate, rupiah } from "./format";
 import { collateralValue, computeCommission, depositCash, describeCollateral, quoteRent } from "./pricing";
-import { connectEvents, detectApi, fetchState, isOnline, pendingCommands, postAction, useApiStatus } from "./api";
+import { connectEvents, detectApi, fetchState, isOnline, reconnectEvents, useApiStatus } from "./api";
+import { loadConfig, useAppConfig } from "./config";
+import { blockingCount, enqueueAction, flushOutbox, pendingEntries, startOutbox } from "./outbox";
+import { SIMULATE_SCOPED, scopeSnapshot } from "./scope";
 import { sha256Text } from "./sha256";
 import { toast } from "./toast";
 import type {
@@ -194,6 +197,9 @@ const EMPTY: DataState = {
   chatReads: {},
   search: { origin: "area", areaId: "ugm", point: { lat: AREA_BY_ID.ugm.lat, lng: AREA_BY_ID.ugm.lng }, radiusKm: 3 },
   bookingCounter: 100,
+  scope: "full",
+  viewerId: null,
+  listingBusy: undefined,
 };
 
 const pickData = (s: AppState): DataState => {
@@ -554,10 +560,17 @@ export const useAppStore = create<AppState>()(
           if (!["ACCEPTED", "ACTIVE"].includes(b.status)) return fail("Pembayaran tersedia setelah request disetujui.");
           if (b.payment.status === "lunas") return fail("Sudah lunas.");
           patchBooking(bookingId, { payment: { ...b.payment, status: "lunas", method, paidAt: now() } });
-          push({
-            notifications: [notify(b.providerId, "booking", "Pembayaran diterima (simulasi)", `${titleOf(b)}: ${rupiah(b.payment.total)} lunas via Sewain.`, href(b))],
-            messages: [sysMsg(bookingId, `Pembayaran ${rupiah(b.payment.total)} ditandai lunas (simulasi ${method.toUpperCase()}).`)],
-          });
+          // "langsung" (payment mode offline): money changed hands outside Sewain; say only what the renter claims.
+          if (method === "langsung")
+            push({
+              notifications: [notify(b.providerId, "booking", "Penyewa menandai sudah bayar", `${titleOf(b)}: penyewa menandai sudah bayar ${rupiah(b.payment.total)} langsung ke kamu.`, href(b))],
+              messages: [sysMsg(bookingId, "Penyewa menandai sudah bayar langsung ke penyedia.")],
+            });
+          else
+            push({
+              notifications: [notify(b.providerId, "booking", "Pembayaran diterima (simulasi)", `${titleOf(b)}: ${rupiah(b.payment.total)} lunas via Sewain.`, href(b))],
+              messages: [sysMsg(bookingId, `Pembayaran ${rupiah(b.payment.total)} ditandai lunas (simulasi ${method.toUpperCase()}).`)],
+            });
           return ok(undefined);
         },
         submitCheckout: (actorId, bookingId, input) => {
@@ -819,11 +832,11 @@ export const useAppStore = create<AppState>()(
           if (!u) return fail("Pengguna tidak ditemukan.");
           set((s) => ({
             strikes: [{ id: uid("s"), userId, ...input, at: now(), byAdminId: adminId }, ...s.strikes],
-            users: s.users.map((x) => (x.id === userId ? { ...x, strikes: x.strikes + (input.severity === "berat" ? 2 : 1) } : x)),
+            users: s.users.map((x) => (x.id === userId ? { ...x, strikes: (x.strikes ?? 0) + (input.severity === "berat" ? 2 : 1) } : x)),
           }));
           push({
             notifications: [notify(userId, "sistem", "Kamu mendapat strike", `${input.reason}. Strike berulang bisa berujung suspend.`, "/profil")],
-            audit: [auditEntry(adminId, "user.strike", publicName(u), String(u.strikes), `${u.strikes + (input.severity === "berat" ? 2 : 1)} (${input.severity}: ${input.reason})`)],
+            audit: [auditEntry(adminId, "user.strike", publicName(u), String(u.strikes ?? 0), `${(u.strikes ?? 0) + (input.severity === "berat" ? 2 : 1)} (${input.severity}: ${input.reason})`)],
           });
           return ok(undefined);
         },
@@ -917,8 +930,6 @@ export const useAppStore = create<AppState>()(
   ),
 );
 
-/* ------------------------------------------------------------ hydration */
-
 /* ------------------------------------------------------- server sync (sewain-api) */
 
 /** Actions that change data on the server. Everything else is client-only (search prefs, demo helpers). */
@@ -931,19 +942,37 @@ const SERVER_ACTIONS = [
   "setBannedKeywords", "createWanted", "offerWanted", "closeWanted", "markNotificationsRead", "advanceClock", "resetClock", "resetDemo",
 ] as const satisfies readonly (keyof Actions)[];
 
-type ServerState = DataState & { serverNow: number };
+type ServerState = DataState & { serverNow: number; scope?: DataState["scope"]; viewerId?: ID | null };
+
+/** Who is signed in in this tab, and tokens for any account on this device. Registered by lib/session.ts. */
+export interface SessionBridge {
+  currentUserId: () => ID | null;
+  tokenFor: (userId: ID) => Promise<string | null>;
+  dropToken: (userId: ID) => void;
+}
+
+let session: SessionBridge = { currentUserId: () => null, tokenFor: async () => null, dropToken: () => {} };
+export function setSessionBridge(b: SessionBridge) {
+  session = b;
+}
 
 let localVersion = 0;
 let syncing: Promise<void> | null = null;
 let resyncWanted = false;
+let forceWanted = false;
 
 /** Replace local data with the server snapshot (keeps client-only search prefs). */
-function applyServerState(s: ServerState) {
+function applyServerState(raw: ServerState) {
+  const s = SIMULATE_SCOPED ? scopeSnapshot(raw, session.currentUserId(), useAppConfig.getState().demoMode) : raw;
   const data: Partial<DataState> = {};
   for (const key of Object.keys(EMPTY) as (keyof DataState)[]) {
     if (key === "search") continue;
     if (key in s) (data as Record<string, unknown>)[key] = (s as unknown as Record<string, unknown>)[key];
   }
+  // v1 sends neither: a full snapshot that is not tied to a viewer.
+  data.scope = s.scope ?? "full";
+  data.viewerId = s.viewerId ?? null;
+  data.listingBusy = s.listingBusy;
   localVersion = s.version;
   // Demo clock follows the server: its offset plus the skew between the two clocks.
   data.clockOffset = s.clockOffset + (s.serverNow - Date.now());
@@ -952,9 +981,10 @@ function applyServerState(s: ServerState) {
   useApiStatus.setState({ lastSync: Date.now() });
 }
 
-/** Fetch the latest snapshot, but never while our own commands are in flight (avoids flicker back to old state). */
+/** Fetch the latest snapshot, but never while our own commands are queued (avoids flicker back to old state). */
 async function syncFromServer(force = false): Promise<void> {
-  if (pendingCommands() > 0) {
+  if (force) forceWanted = true;
+  if (blockingCount() > 0) {
     resyncWanted = true;
     return;
   }
@@ -963,8 +993,16 @@ async function syncFromServer(force = false): Promise<void> {
     return syncing;
   }
   syncing = (async () => {
+    const f = forceWanted;
+    forceWanted = false;
     const s = await fetchState<ServerState>();
-    if (s && (force || s.version !== localVersion)) applyServerState(s);
+    // A command queued while the request was in flight would be rolled back by this snapshot: wait for it.
+    if (s && blockingCount() > 0) {
+      resyncWanted = true;
+      forceWanted ||= f;
+      return;
+    }
+    if (s && (f || s.version !== localVersion)) applyServerState(s);
   })().finally(() => {
     syncing = null;
     if (resyncWanted) {
@@ -975,10 +1013,20 @@ async function syncFromServer(force = false): Promise<void> {
   return syncing;
 }
 
-let depth = 0;
+/** Re-read the snapshot for whoever is signed in now (a scoped snapshot depends on the viewer). */
+export function resyncForViewer() {
+  if (!isOnline()) return;
+  void syncFromServer(true);
+  reconnectEvents();
+}
 
-/** Wrap each data action: apply locally (instant UI, same validation) → send to the server → reconcile. */
+let depth = 0;
+let serverSyncInstalled = false;
+
+/** Wrap each data action: apply locally (instant UI, same validation) → queue durably → send → reconcile. */
 function installServerSync() {
+  if (serverSyncInstalled) return;
+  serverSyncInstalled = true;
   const state = useAppStore.getState();
   const wrapped: Partial<Actions> = {};
   for (const name of SERVER_ACTIONS) {
@@ -995,10 +1043,7 @@ function installServerSync() {
       }
       const r = res as { ok?: boolean; value?: unknown } | undefined;
       if (r && r.ok === false) return res; // rejected locally, nothing to send
-      void postAction(name, args, r?.value).then((resp) => {
-        if (!resp.ok) toast(`Server: ${resp.error ?? "aksi ditolak"}`, "error");
-        void syncFromServer(!resp.ok);
-      });
+      enqueueAction(session.currentUserId(), name, args, typeof r?.value === "string" ? r.value : undefined);
       return res;
     };
   }
@@ -1010,7 +1055,74 @@ function installServerSync() {
   useAppStore.setState(wrapped);
 }
 
+/** Does an object with this client id already exist on the server? (v1 safety net for resent creates) */
+async function existsOnServer(id: ID): Promise<boolean> {
+  const s = await fetchState<ServerState>();
+  if (!s) return false;
+  const lists: { id: ID }[][] = [s.users, s.listings, s.bookings, s.disputes, s.reports, s.wanted, s.verifications];
+  return lists.some((l) => l?.some((x) => x.id === id));
+}
+
+function startServerOutbox() {
+  startOutbox({
+    tokenFor: (userId) => session.tokenFor(userId),
+    dropToken: (userId) => session.dropToken(userId),
+    idempotent: () => useAppConfig.getState().fromServer,
+    exists: existsOnServer,
+    onAccepted: () => {},
+    onRejected: (_entry, error, quiet) => {
+      if (!quiet) toast(`Server: ${error || "aksi ditolak"}`, "error");
+      void syncFromServer(true);
+    },
+    onSettled: () => void syncFromServer(),
+  });
+}
+
 let booted = false;
+let connecting = false;
+
+/** Connect to sewain-api: config, pending actions first, then the snapshot, then the live change feed. */
+async function connectServer(): Promise<boolean> {
+  if (connecting || isOnline()) return isOnline();
+  connecting = true;
+  try {
+    if (!(await detectApi())) return false;
+    await loadConfig();
+    startServerOutbox();
+    // Actions left over from a reload/offline spell go out before the snapshot, so it already contains them.
+    await flushOutbox();
+    const s = await fetchState<ServerState>();
+    if (!s) return false;
+    // Still blocked (server erroring): keep the cached, optimistic data unless there is nothing cached at all.
+    if (blockingCount() === 0 || !useAppStore.getState().seeded) applyServerState(s);
+    else resyncWanted = true;
+    useApiStatus.setState({ status: "online" });
+    try {
+      localStorage.setItem(API_SEEN_KEY, "1");
+    } catch {}
+    installServerSync();
+    connectEvents(
+      (version) => {
+        if (version !== localVersion) void syncFromServer();
+      },
+      () => {
+        void flushOutbox();
+        void syncFromServer();
+      },
+      // Demo bearer sessions: identify the socket (v2 sends events per user). Real sessions use the cookie.
+      async () => {
+        const id = session.currentUserId();
+        return id && useAppConfig.getState().demoMode ? session.tokenFor(id) : null;
+      },
+    );
+    document.addEventListener("visibilitychange", () => document.visibilityState === "visible" && void syncFromServer());
+    return true;
+  } finally {
+    connecting = false;
+  }
+}
+
+const API_SEEN_KEY = "sewain-api-seen";
 
 /**
  * Called once from <StoreBoot/>. Loads cached browser data instantly, then connects to sewain-api:
@@ -1020,28 +1132,24 @@ export async function bootStore() {
   if (booted || typeof window === "undefined") return;
   booted = true;
   await useAppStore.persist.rehydrate();
-  const online = await detectApi();
-  if (online) {
-    const s = await fetchState<ServerState>();
-    if (s) {
-      applyServerState(s);
-      useApiStatus.setState({ status: "online" });
-      installServerSync();
-      connectEvents(
-        (version) => {
-          if (version !== localVersion) void syncFromServer();
-        },
-        () => void syncFromServer(),
-      );
-      document.addEventListener("visibilitychange", () => document.visibilityState === "visible" && void syncFromServer());
-    }
-  }
+  await connectServer();
   if (!isOnline()) {
     useApiStatus.setState({ status: "offline" });
     if (!useAppStore.getState().seeded) useAppStore.getState().resetDemo();
     window.addEventListener("storage", (e) => {
-      if (e.key === STORAGE_KEY) void useAppStore.persist.rehydrate();
+      if (e.key === STORAGE_KEY && !isOnline()) void useAppStore.persist.rehydrate();
     });
+    // Booted without a connection on a device that used the API before (or with actions still queued):
+    // keep trying, so queued actions reach the server once the network is back.
+    let seen = false;
+    try {
+      seen = localStorage.getItem(API_SEEN_KEY) === "1";
+    } catch {}
+    if (seen || pendingEntries().length > 0) {
+      const retry = () => void connectServer().then((ok) => ok && window.clearInterval(timer));
+      const timer = window.setInterval(retry, 20_000);
+      window.addEventListener("online", retry);
+    }
   }
   useAppStore.setState({ hydrated: true });
   useAppStore.getState().tick();

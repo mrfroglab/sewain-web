@@ -21,7 +21,7 @@ type Filter = "semua" | "belum" | "strike" | "suspend" | "blacklist";
 const MATCH: Record<Filter, (u: User) => boolean> = {
   semua: () => true,
   belum: (u) => u.verification.status !== "terverifikasi",
-  strike: (u) => u.strikes > 0,
+  strike: (u) => (u.strikes ?? 0) > 0,
   suspend: (u) => u.status === "suspend",
   blacklist: (u) => u.status === "blacklist",
 };
@@ -140,7 +140,7 @@ function UserRow({ user: u, onOpen }: { user: User; onOpen: () => void }) {
           <span className="mt-1.5 flex flex-wrap gap-1 lg:hidden">
             <Badge tone="outline">{accountLabel(u)}</Badge>
             <Badge tone={verified ? "soft" : "outline"}>{VERIFICATION_LABEL[u.verification.status]}</Badge>
-            {u.strikes > 0 && <Badge tone="ink">{u.strikes} strike</Badge>}
+            {(u.strikes ?? 0) > 0 && <Badge tone="ink">{(u.strikes ?? 0)} strike</Badge>}
             {u.status !== "aktif" && <Badge tone="ink">{STATUS_LABEL[u.status]}</Badge>}
           </span>
         </span>
@@ -149,7 +149,7 @@ function UserRow({ user: u, onOpen }: { user: User; onOpen: () => void }) {
       <span className="hidden lg:block">
         <Badge tone={verified ? "soft" : "outline"}>{VERIFICATION_LABEL[u.verification.status]}</Badge>
       </span>
-      <span className={cn("hidden text-body-sm tabular-nums lg:block", u.strikes > 0 ? "font-semibold text-ink" : "text-ash")}>{u.strikes > 0 ? u.strikes : "–"}</span>
+      <span className={cn("hidden text-body-sm tabular-nums lg:block", (u.strikes ?? 0) > 0 ? "font-semibold text-ink" : "text-ash")}>{(u.strikes ?? 0) > 0 ? u.strikes : "–"}</span>
       <span className="hidden lg:block">
         <Badge tone={u.status === "aktif" ? "soft" : "ink"}>{STATUS_LABEL[u.status]}</Badge>
       </span>

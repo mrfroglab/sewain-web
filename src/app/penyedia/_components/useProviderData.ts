@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo } from "react";
+import { usePaymentMode } from "@/lib/config";
 import { isoDate } from "@/lib/format";
 import { nextAction, userRating } from "@/lib/selectors";
 import { useAppStore, useNow } from "@/lib/store";
@@ -25,6 +26,7 @@ export function useProviderData(user: User) {
   const reviews = useAppStore((s) => s.reviews);
   const now = useNow(30_000);
 
+  const paymentMode = usePaymentMode();
   return useMemo(() => {
     const listingById = new Map(listings.map((l) => [l.id, l]));
     const userById = new Map(users.map((u) => [u.id, u]));
@@ -35,7 +37,7 @@ export function useProviderData(user: User) {
 
     const ongoing: OngoingRow[] = asProvider
       .filter((b) => ONGOING.includes(b.status))
-      .map((b) => ({ b, listing: listingById.get(b.listingId), renter: userById.get(b.renterId), action: nextAction(b, user.id, reviews) }))
+      .map((b) => ({ b, listing: listingById.get(b.listingId), renter: userById.get(b.renterId), action: nextAction(b, user.id, reviews, paymentMode) }))
       .sort((x, y) => Number(!!y.action) - Number(!!x.action) || Number(y.b.overdue) - Number(x.b.overdue) || x.b.endDate.localeCompare(y.b.endDate));
 
     const month = isoDate(now).slice(0, 7);
@@ -58,7 +60,7 @@ export function useProviderData(user: User) {
       },
       ratingOf: (userId: string) => userRating({ users, reviews }, userId, now),
     };
-  }, [listings, bookings, users, reviews, now, user.id]);
+  }, [listings, bookings, users, reviews, now, user.id, paymentMode]);
 }
 
 export type ProviderData = ReturnType<typeof useProviderData>;

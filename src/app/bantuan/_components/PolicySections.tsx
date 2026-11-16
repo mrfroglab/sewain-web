@@ -157,6 +157,11 @@ export function Syarat() {
           "Pelanggaran bisa berujung strike, suspend, sampai blokir berbasis NIK.",
         ]}
       />
+      <div>
+        <ButtonLink href="/syarat" variant="secondary">
+          Baca draf Syarat & ketentuan
+        </ButtonLink>
+      </div>
     </HelpSection>
   );
 }
@@ -175,6 +180,11 @@ export function Privasi() {
           "Usulan masa simpan foto bukti: 90 hari setelah sewa selesai, atau sampai sengketa tuntas.",
         ]}
       />
+      <div>
+        <ButtonLink href="/privasi" variant="secondary">
+          Baca draf Kebijakan privasi
+        </ButtonLink>
+      </div>
       <Notice icon={<Database className="size-4" />} title="Di prototipe ini">
         Semua data (akun, listing, foto) hanya tersimpan di browser yang sedang kamu pakai, tidak dikirim ke server mana pun.
       </Notice>

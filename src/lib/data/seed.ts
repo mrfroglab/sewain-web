@@ -896,6 +896,8 @@ export function createSeed(now: number): DataState {
   return {
     version: DATA_VERSION,
     seeded: true,
+    scope: "full",
+    viewerId: null,
     seedBase: now,
     clockOffset: 0,
     users,
