@@ -47,6 +47,8 @@ const suites = [
   // Real OTP (v2, OTP_PROVIDER=echo). Both skip with exit 0 on servers without it.
   { name: "Daftar OTP → KYC → admin setujui → listing", file: "auth-otp.mjs", args: [base, api, path.join(out, "auth-otp")] },
   { name: "Pengaturan akun: sesi, preferensi, ekspor, hapus", file: "account.mjs", args: [base, api, path.join(out, "account")] },
+  // Daily OTP send cap (503 otp_daily_cap): only reproducible on e2e/mock-api.mjs, skips (exit 0) elsewhere.
+  { name: "Plafon kirim OTP harian", file: "otp-daily-cap.mjs", args: [base, api, path.join(out, "otp-daily-cap")] },
 ];
 
 let failed = 0;

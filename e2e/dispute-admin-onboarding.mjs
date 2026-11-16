@@ -114,6 +114,26 @@ await step(realOtp ? "Tamu daftar: nomor HP → kode uji staging → S&K → nam
   await btn(G, "Lewati (demo)").first().click();
   await G.getByText(/Terverifikasi/i).first().waitFor();
 });
+// v2 (SNAPSHOT_USERS=referenced): the new account has no listings or reviews, so other users' snapshots do not
+// carry it. /u/<id> opened from a direct link must fetch GET /api/v1/users/{id}. Skipped while the API answers 404
+// for every id (endpoint not deployed yet).
+await step("Profil akun baru (tidak dirujuk) dibuka Mas Bayu lewat URL langsung", async () => {
+  const newId = await G.evaluate(() => JSON.parse(sessionStorage.getItem("sewain-session") ?? "{}").state?.userId ?? null);
+  if (!newId) throw new Error("id akun baru tidak terbaca dari sesi tab");
+  const api = (process.env.API_URL ?? base).replace(/\/$/, "");
+  const status = (id) => fetch(`${api}/api/v1/users/${encodeURIComponent(id)}`).then((r) => r.status, () => 0);
+  const [known, fresh] = await Promise.all([status("u-bayu"), status(newId)]);
+  if (known === 404 && fresh === 404) return console.log("   ↷ dilewati: server belum punya GET /api/v1/users/{id} (404 untuk semua id)");
+  if (fresh !== 200) throw new Error(`GET /api/v1/users/${newId} → ${fresh}`);
+  const asked = B.waitForResponse((r) => r.url().includes(`/api/v1/users/${newId}`), { timeout: 10000 }).then(() => true, () => false);
+  await go(B, `/u/${newId}`);
+  await B.getByRole("heading", { level: 1, name: "Putra" }).waitFor({ timeout: 10000 });
+  await B.getByRole("heading", { name: /Barang yang disewakan/ }).waitFor();
+  if (await B.getByText("Pengguna tidak ditemukan").count()) throw new Error("halaman 'Pengguna tidak ditemukan' tampil");
+  console.log(`   profil ${newId} ${(await asked) ? "diambil dari GET /api/v1/users/{id}" : "sudah ada di snapshot"}`);
+  await go(B, "/u/u-tidak-ada-sama-sekali");
+  await B.getByText("Pengguna tidak ditemukan").waitFor({ timeout: 10000 });
+});
 await step("Percepat jam +1 hari lewat panel Demo → request b-requested kadaluarsa", async () => {
   await go(B, "/sewaan/b-requested");
   await B.getByRole("button", { name: /Mode demo/ }).click();
