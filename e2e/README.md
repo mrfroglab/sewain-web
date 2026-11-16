@@ -10,6 +10,7 @@ Skenario yang dipakai sebagai gerbang sebelum versi baru menggantikan demo (ROAD
 | `dispute-admin-onboarding.mjs` | Sengketa L1, mediasi admin L2, wizard listing Bu Tini, daftar + OTP + eKYC simulasi, kadaluarsa via jam demo |
 | `realtime.mjs` | Pesan chat muncul di perangkat lain tanpa reload |
 | `offline-queue.mjs` | Antrean aksi (F6.9): aksi lalu reload instan, request terputus lalu reload, dan offline → online. Server menerima tepat sekali |
+| `routes-smoke.mjs` | Semua rute × tamu/penyewa/penyedia/admin di 360 px: tanpa error JS, tanpa scroll horizontal, tanpa "tidak ditemukan". Tidak mengubah data, dijalankan terpisah: `node routes-smoke.mjs <web-base>` |
 | `run.mjs` | Menjalankan semuanya berurutan, reset data demo sebelum/sesudah, keluar 1 kalau ada yang gagal |
 
 ```bash
@@ -27,3 +28,6 @@ memakai `SNAPSHOT_SCOPE=scoped`.
 
 Butuh `DEMO_MODE` di server (login demo + reset data). Suite ini mengubah data, jadi jangan arahkan ke produksi.
 Untuk domain demo (`sewain.hallojanu.me`) hanya jalankan di luar jam presentasi. Data otomatis di-reset di akhir.
+
+Mode snapshot terbatas tanpa backend v2: jalankan web dev dengan `NEXT_PUBLIC_SIMULATE_SCOPED=1` (lihat
+`src/lib/scope.ts`), lalu arahkan `run.mjs` dan `routes-smoke.mjs` ke web itu.
