@@ -4,6 +4,7 @@ import { DemoDock } from "@/components/shell/DemoDock";
 import { Footer } from "@/components/shell/Footer";
 import { Header } from "@/components/shell/Header";
 import { PendingActions } from "@/components/shell/PendingActions";
+import { PushPrompt } from "@/components/push/PushPrompt";
 import { StoreBoot } from "@/components/shell/StoreBoot";
 import { TabBar } from "@/components/shell/TabBar";
 import { Toaster } from "@/components/ui/Toaster";
@@ -45,6 +46,7 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
         <TabBar />
         <DemoDock />
         <PendingActions />
+        <PushPrompt />
         <Toaster />
       </body>
     </html>
