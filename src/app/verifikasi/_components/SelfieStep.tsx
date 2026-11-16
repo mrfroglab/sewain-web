@@ -1,7 +1,7 @@
 "use client";
 
 import { ArrowLeft, Camera, ScanFace } from "lucide-react";
-import { useEffect, useState } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import { CameraCapture, type Capture } from "@/components/photo/CameraCapture";
 import { Button } from "@/components/ui/Button";
 import { DEMO_SELFIE } from "./demo-images";
@@ -16,12 +16,21 @@ export function SelfieStep({
   onCapture,
   onBack,
   onSkip,
+  busyView,
+  demoSamples = true,
+  intro,
 }: {
   capture: Capture | null;
   matching: boolean;
   onCapture: (c: Capture) => void;
   onBack: () => void;
-  onSkip: () => void;
+  /** undefined = no "Lewati (demo)" */
+  onSkip?: () => void;
+  /** shown instead of the simulated face match while `matching` (real KYC: upload progress / retry) */
+  busyView?: ReactNode;
+  demoSamples?: boolean;
+  /** replaces the subtitle under the title */
+  intro?: ReactNode;
 }) {
   const [camOpen, setCamOpen] = useState(false);
 
@@ -33,7 +42,7 @@ export function SelfieStep({
       <h1 id="verif-selfie" className="text-[26px] font-semibold leading-tight tracking-[-0.6px] text-ink">
         Selfie sambil memegang KTP
       </h1>
-      <p className="mt-2 text-body text-smoke">Supaya kami yakin KTP-nya memang milikmu. Wajahmu dicocokkan dengan foto di KTP.</p>
+      <p className="mt-2 text-body text-smoke">{intro ?? "Supaya kami yakin KTP-nya memang milikmu. Wajahmu dicocokkan dengan foto di KTP."}</p>
 
       <div className="relative mx-auto mt-6 aspect-[3/4] w-52 overflow-hidden rounded-[50%] bg-soft-gray sm:w-60">
         {capture ? (
@@ -52,7 +61,7 @@ export function SelfieStep({
       </div>
 
       {matching ? (
-        <MatchProgress />
+        busyView ?? <MatchProgress />
       ) : (
         <>
           <ul className="mx-auto mt-6 max-w-sm space-y-1.5 text-body-sm text-graphite">
@@ -67,7 +76,7 @@ export function SelfieStep({
             <Button size="lg" block onClick={() => setCamOpen(true)}>
               <Camera className="size-4" /> Buka kamera depan
             </Button>
-            <SkipDemoButton onSkip={onSkip} />
+            {onSkip && <SkipDemoButton onSkip={onSkip} />}
           </div>
         </>
       )}
@@ -81,7 +90,7 @@ export function SelfieStep({
         frame="selfie"
         facing="user"
         multiple={false}
-        demoSources={[DEMO_SELFIE]}
+        demoSources={demoSamples ? [DEMO_SELFIE] : []}
       />
     </section>
   );

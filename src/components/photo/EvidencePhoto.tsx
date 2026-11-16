@@ -3,7 +3,7 @@
 import { ImageOff } from "lucide-react";
 import { useState } from "react";
 import { formatDateTime } from "@/lib/format";
-import { usePhoto, usePhotoSrc } from "@/lib/photos";
+import { onPhotoLoadError, usePhoto, usePhotoSrc } from "@/lib/photos";
 import { shortHash } from "@/lib/sha256";
 import type { ID } from "@/lib/types";
 import { cn } from "../ui/cn";
@@ -16,6 +16,10 @@ export function EvidencePhoto({ id, bookingCode, className, showMeta = true, asp
   const photo = usePhoto(id);
   const url = usePhotoSrc(photo?.src);
   const [open, setOpen] = useState(false);
+  // A failed signed URL (expired/403): refetch the snapshot, then retry with the new src. `failed` holds the src
+  // that broke, so a new src from the snapshot renders again automatically.
+  const [failed, setFailed] = useState<string | null>(null);
+  const [retry, setRetry] = useState(0);
   if (!photo) return <div className={cn(aspect, "rounded-image bg-soft-gray", className)} />;
   const watermark = `${bookingCode ?? ""} · ${formatDateTime(photo.serverTimestamp)}`;
   return (
@@ -23,7 +27,26 @@ export function EvidencePhoto({ id, bookingCode, className, showMeta = true, asp
       <figure className={cn("min-w-0", className)}>
         <button type="button" onClick={() => url && setOpen(true)} className={cn("relative block w-full overflow-hidden rounded-image bg-soft-gray", aspect)} aria-label={`Perbesar foto ${photo.angle ?? ""}`}>
           {url ? (
-            <img src={url} alt={photo.angle ?? "Foto bukti"} className="absolute inset-0 size-full object-cover" loading="lazy" />
+            failed === url ? (
+              <span className="absolute inset-0 grid place-items-center p-2 text-center text-micro text-ash">
+                <span>
+                  <ImageOff className="mx-auto mb-1 size-5" />
+                  Foto belum bisa dimuat
+                </span>
+              </span>
+            ) : (
+              <img
+                key={retry}
+                src={url}
+                alt={photo.angle ?? "Foto bukti"}
+                className="absolute inset-0 size-full object-cover"
+                loading="lazy"
+                onError={() => {
+                  if (onPhotoLoadError(photo.id, photo.src)) window.setTimeout(() => setRetry((n) => n + 1), 1500);
+                  else setFailed(url);
+                }}
+              />
+            )
           ) : url === null ? (
             <span className="absolute inset-0 grid place-items-center p-2 text-center text-micro text-ash">
               <span>

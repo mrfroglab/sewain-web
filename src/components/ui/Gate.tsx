@@ -3,6 +3,7 @@
 import { IdCard, LogIn } from "lucide-react";
 import { usePathname } from "next/navigation";
 import type { ReactNode } from "react";
+import { useRealOtp } from "@/lib/config";
 import { useCurrentUser, useReady } from "@/lib/session";
 import type { User } from "@/lib/types";
 import { ButtonLink } from "./Button";
@@ -19,6 +20,7 @@ export function RequireAuth({ children, role }: { children: (user: User) => Reac
   const ready = useReady();
   const user = useCurrentUser();
   const path = usePathname();
+  const realOtp = useRealOtp();
   if (!ready) return <PageSkeleton />;
   if (!user)
     return (
@@ -26,7 +28,7 @@ export function RequireAuth({ children, role }: { children: (user: User) => Reac
         <EmptyState
           icon={<LogIn className="size-5" />}
           title="Masuk dulu, yuk"
-          description="Halaman ini butuh akun. Pakai akun demo atau daftar dengan nomor HP (OTP simulasi)."
+          description={realOtp ? "Halaman ini butuh akun. Masuk atau daftar dengan nomor HP, kodenya kami kirim lewat WhatsApp/SMS." : "Halaman ini butuh akun. Pakai akun demo atau daftar dengan nomor HP (OTP simulasi)."}
           action={<ButtonLink href={`/masuk?next=${encodeURIComponent(path)}`}>Masuk / daftar</ButtonLink>}
         />
       </Container>

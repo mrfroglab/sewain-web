@@ -46,7 +46,7 @@ export const COLLATERAL_LABEL: Record<CollateralFilter, string> = {
   custom: "Jaminan custom",
 };
 
-export const HANDOVER_SHORT: Record<HandoverMethod, string> = { cod: "COD / ketemuan", jemput: "Ambil sendiri", kurir: "Kurir" };
+export const HANDOVER_SHORT: Record<HandoverMethod, string> = { cod: "COD / ketemuan", jemput: "Ambil sendiri", kurir: "Kurir", antar: "Diantar" };
 export const PROVIDER_TYPE_LABEL: Record<AccountType, string> = { individu: "Individu", toko: "Toko rental" };
 
 const SORTS = Object.keys(SORT_LABEL) as SortKey[];

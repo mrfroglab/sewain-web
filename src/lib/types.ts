@@ -126,7 +126,8 @@ export interface Category {
   checklist?: string[]; // checklist fungsi (P1)
 }
 
-export type HandoverMethod = "cod" | "jemput" | "kurir";
+/** `antar` (provider delivers) comes from the admin CSV import (sewain-api importcsv), the wizard offers the other three. */
+export type HandoverMethod = "cod" | "jemput" | "kurir" | "antar";
 
 export type CollateralKind = "identitas" | "deposit" | "barang" | "custom";
 

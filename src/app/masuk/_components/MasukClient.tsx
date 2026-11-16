@@ -1,19 +1,22 @@
 "use client";
 
 import { useRouter, useSearchParams } from "next/navigation";
-import { useState } from "react";
+import { useState, type ReactNode } from "react";
 import { Spinner } from "@/components/ui/Button";
 import { Container } from "@/components/ui/Layout";
 import { Ready } from "@/components/ui/Gate";
+import { requestOtp, type OtpRequestResult } from "@/lib/account";
+import { useAppConfig, useRealOtp } from "@/lib/config";
 import { publicName } from "@/lib/selectors";
 import { useCurrentUser, useSession } from "@/lib/session";
-import { useAppStore } from "@/lib/store";
+import { refreshSnapshot, useAppStore } from "@/lib/store";
 import { toast } from "@/lib/toast";
 import type { User } from "@/lib/types";
 import { DemoAccounts } from "./DemoAccounts";
 import { safeNext } from "./helpers";
 import { OtpStep } from "./OtpStep";
 import { PhoneStep } from "./PhoneStep";
+import { ConsentStep, RealOtpStep, type VerifiedLogin } from "./RealOtpStep";
 import { RegisterStep } from "./RegisterStep";
 import { SignedInCard } from "./SignedInCard";
 
@@ -29,7 +32,15 @@ export function MasukClient() {
   );
 }
 
-type Step = { name: "phone" } | { name: "otp"; phone: string } | { name: "register"; phone: string } | { name: "leaving" };
+type Step =
+  | { name: "phone" }
+  | { name: "otp"; phone: string }
+  | { name: "register"; phone: string }
+  | { name: "leaving" }
+  // real OTP (F6.1)
+  | { name: "realOtp"; phone: string; challenge: OtpRequestResult }
+  | { name: "consent"; phone: string; code: string }
+  | { name: "profile"; phone: string; userId: string };
 
 function MasukFlow({ next, startSwitching }: { next: string | null; startSwitching: boolean }) {
   const router = useRouter();
@@ -38,6 +49,8 @@ function MasukFlow({ next, startSwitching }: { next: string | null; startSwitchi
   const [step, setStep] = useState<Step>({ name: "phone" });
   const [switching, setSwitching] = useState(startSwitching);
   const [phoneDraft, setPhoneDraft] = useState("");
+  const realOtp = useRealOtp();
+  const demoMode = useAppConfig((s) => s.demoMode);
 
   const leave = (href: string) => {
     setStep({ name: "leaving" });
@@ -61,8 +74,28 @@ function MasukFlow({ next, startSwitching }: { next: string | null; startSwitchi
     enter(existing, `Selamat datang kembali, ${publicName(existing)}!`);
   };
 
+  /** Real OTP: ask the server to send a code. Returns the error to show under the phone field. */
+  const sendCode = async (phone: string): Promise<string | null> => {
+    const r = await requestOtp(phone);
+    if (!r.body.ok) return r.body.error ?? "Gagal mengirim kode OTP.";
+    setStep({ name: "realOtp", phone, challenge: r.body });
+    return null;
+  };
+
+  /** Real OTP verified: the session exists on the server. New (or never completed) accounts fill in their profile. */
+  const onRealVerified = async (phone: string, { result, transport }: VerifiedLogin) => {
+    signIn(result.userId, { transport, token: result.token ?? null });
+    setStep({ name: "leaving" });
+    await refreshSnapshot();
+    const u = useAppStore.getState().users.find((x) => x.id === result.userId);
+    if (result.isNew || !u?.name?.trim()) return setStep({ name: "profile", phone, userId: result.userId });
+    toast(`Selamat datang kembali, ${publicName(u)}!`, "success");
+    leave(next ?? (result.role === "admin" || u.role === "admin" ? "/admin" : "/"));
+  };
+
   const onRegistered = (userId: string) => {
-    signIn(userId);
+    // Real OTP accounts are already signed in (bearer/cookie session); only the demo registration signs in here.
+    if (useSession.getState().userId !== userId) signIn(userId);
     toast("Akun dibuat! Satu langkah lagi: verifikasi KTP.", "success");
     leave(`/verifikasi${next ? `?next=${encodeURIComponent(next)}` : ""}`);
   };
@@ -87,6 +120,28 @@ function MasukFlow({ next, startSwitching }: { next: string | null; startSwitchi
       </Container>
     );
 
+  const narrow = (child: ReactNode) => (
+    <Container narrow className="py-6 lg:py-12">
+      <div className="mx-auto max-w-md">{child}</div>
+    </Container>
+  );
+
+  if (step.name === "realOtp")
+    return narrow(
+      <RealOtpStep
+        phone={step.phone}
+        challenge={step.challenge}
+        onBack={() => setStep({ name: "phone" })}
+        onVerified={(login) => void onRealVerified(step.phone, login)}
+        onNeedsConsent={(code) => setStep({ name: "consent", phone: step.phone, code })}
+      />,
+    );
+
+  if (step.name === "consent")
+    return narrow(<ConsentStep phone={step.phone} code={step.code} onBack={() => setStep({ name: "phone" })} onVerified={(login) => void onRealVerified(step.phone, login)} />);
+
+  if (step.name === "profile") return narrow(<RegisterStep phone={step.phone} completeFor={step.userId} onRegistered={onRegistered} />);
+
   if (step.name === "register")
     return (
       <Container narrow className="py-6 lg:py-12">
@@ -98,14 +153,15 @@ function MasukFlow({ next, startSwitching }: { next: string | null; startSwitchi
 
   return (
     <Container className="py-6 lg:py-12">
-      <div className="mx-auto grid max-w-5xl gap-10 lg:grid-cols-2 lg:gap-16">
+      <div className={demoMode ? "mx-auto grid max-w-5xl gap-10 lg:grid-cols-2 lg:gap-16" : "mx-auto max-w-md"}>
         <PhoneStep
           value={phoneDraft}
           onChange={setPhoneDraft}
-          onSubmit={(phone) => setStep({ name: "otp", phone })}
+          onSubmit={realOtp ? sendCode : (phone) => setStep({ name: "otp", phone })}
           currentUser={switching ? user : null}
+          real={realOtp}
         />
-        <DemoAccounts currentUserId={user?.id} onPick={(u) => enter(u, `Masuk sebagai ${publicName(u)}.`)} />
+        {demoMode && <DemoAccounts currentUserId={user?.id} onPick={(u) => enter(u, `Masuk sebagai ${publicName(u)}.`)} />}
       </div>
     </Container>
   );

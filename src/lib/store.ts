@@ -949,9 +949,27 @@ export interface SessionBridge {
   currentUserId: () => ID | null;
   tokenFor: (userId: ID) => Promise<string | null>;
   dropToken: (userId: ID) => void;
+  /** a scoped snapshot came back for another viewer (a real session expired server-side: v2 answers as guest) */
+  viewerMismatch?: (askedFor: ID, got: ID | null) => void;
+  /** runs once /api/v1/config is known, before the first snapshot (production cookie session restore) */
+  afterConfig?: () => Promise<void>;
 }
 
 let session: SessionBridge = { currentUserId: () => null, tokenFor: async () => null, dropToken: () => {} };
+
+/** Called after every data action that went to the server queue (e.g. the polite push opt-in, F6.5). */
+let actionObserver: ((name: string) => void) | null = null;
+export function setActionObserver(fn: ((name: string) => void) | null) {
+  actionObserver = fn;
+}
+
+/** Fetch a snapshot whose viewer we know, and flag a v2 answer for somebody else (expired session). */
+async function fetchStateFor(): Promise<ServerState | null> {
+  const asked = session.currentUserId();
+  const s = await fetchState<ServerState>();
+  if (s && s.scope === "scoped" && asked && asked === session.currentUserId() && (s.viewerId ?? null) !== asked) session.viewerMismatch?.(asked, s.viewerId ?? null);
+  return s;
+}
 export function setSessionBridge(b: SessionBridge) {
   session = b;
 }
@@ -995,7 +1013,7 @@ async function syncFromServer(force = false): Promise<void> {
   syncing = (async () => {
     const f = forceWanted;
     forceWanted = false;
-    const s = await fetchState<ServerState>();
+    const s = await fetchStateFor();
     // A command queued while the request was in flight would be rolled back by this snapshot: wait for it.
     if (s && blockingCount() > 0) {
       resyncWanted = true;
@@ -1018,6 +1036,12 @@ export function resyncForViewer() {
   if (!isOnline()) return;
   void syncFromServer(true);
   reconnectEvents();
+}
+
+/** Force a fresh snapshot now (e.g. a signed photo URL expired, an account/KYC call changed server data). */
+export function refreshSnapshot(): Promise<void> {
+  if (!isOnline()) return Promise.resolve();
+  return syncFromServer(true);
 }
 
 let depth = 0;
@@ -1044,6 +1068,7 @@ function installServerSync() {
       const r = res as { ok?: boolean; value?: unknown } | undefined;
       if (r && r.ok === false) return res; // rejected locally, nothing to send
       enqueueAction(session.currentUserId(), name, args, typeof r?.value === "string" ? r.value : undefined);
+      actionObserver?.(name);
       return res;
     };
   }
@@ -1088,10 +1113,11 @@ async function connectServer(): Promise<boolean> {
   try {
     if (!(await detectApi())) return false;
     await loadConfig();
+    await session.afterConfig?.().catch(() => {});
     startServerOutbox();
     // Actions left over from a reload/offline spell go out before the snapshot, so it already contains them.
     await flushOutbox();
-    const s = await fetchState<ServerState>();
+    const s = await fetchStateFor();
     if (!s) return false;
     // Still blocked (server erroring): keep the cached, optimistic data unless there is nothing cached at all.
     if (blockingCount() === 0 || !useAppStore.getState().seeded) applyServerState(s);

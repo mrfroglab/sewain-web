@@ -227,7 +227,8 @@ async function sendOne(entry: OutboxEntry, h: OutboxHooks): Promise<Step> {
   let token: string | null = null;
   if (entry.userId) {
     token = await h.tokenFor(entry.userId);
-    if (!token) {
+    // "" = cookie session: authenticated without a token in JavaScript.
+    if (token == null) {
       stuck.add(entry.userId);
       return "next";
     }

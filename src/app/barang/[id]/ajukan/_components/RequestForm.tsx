@@ -22,6 +22,7 @@ const HANDOVER_ICON: Record<HandoverMethod, ReactNode> = {
   cod: <Handshake className="size-4" />,
   jemput: <House className="size-4" />,
   kurir: <Truck className="size-4" />,
+  antar: <Truck className="size-4" />,
 };
 
 function handoverHint(method: HandoverMethod, listing: Listing): string {
@@ -32,6 +33,8 @@ function handoverHint(method: HandoverMethod, listing: Listing): string {
       return `Ambil di tempat penyedia, area ${areaLabel(listing)}. Alamat lengkap dibagikan setelah disetujui.`;
     case "kurir":
       return "Kamu pesan dan bayar kurir sendiri (mis. ojek online). Tetap foto kondisi saat barang tiba.";
+    case "antar":
+      return "Penyedia mengantar barang ke alamatmu. Alamat dibagikan setelah disetujui; foto kondisi saat barang tiba.";
   }
 }
 

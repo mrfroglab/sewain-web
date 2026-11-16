@@ -12,10 +12,10 @@ const check = (name, cond, extra = "") => { cond ? pass++ : failN++; console.log
 
 const raka = await login("u-raka"), bayu = await login("u-bayu"), admin = await login("u-admin");
 
-// v2 routes change events per user (guests only get public changes), so listen as Mas Bayu: every step below
-// touches his booking or his listings. v1 ignores the token and broadcasts everything.
+// v2 sends change events only to the users involved (a guest socket gets public changes only): listen as Raka.
+// Browsers cannot send headers on a WebSocket, so demo bearer sessions pass the token as ?token= (v1 ignores it).
 const events = [];
-const ws = new WebSocket(B.replace("http", "ws") + "/api/v1/events?token=" + encodeURIComponent(bayu ?? ""));
+const ws = new WebSocket(`${B.replace("http", "ws")}/api/v1/events?token=${encodeURIComponent(raka ?? "")}`);
 ws.onmessage = (m) => events.push(JSON.parse(m.data));
 await new Promise((r) => (ws.onopen = r));
 // v2 scopes the snapshot per viewer (ROADMAP §4): always read it as the user whose data is being checked.
@@ -47,10 +47,9 @@ const up = await (await fetch(B + "/api/v1/photos", { method: "POST", body: fd, 
 const expected = createHash("sha256").update(img).digest("hex");
 check("photo upload: server-side sha256 matches bytes", up.ok && up.photo.sha256 === expected, JSON.stringify(up).slice(0, 200));
 const served = await fetch(B + up.photo.src);
-// v2 may serve parties a watermarked display copy (FR-P5): its own hash is X-Content-SHA256 and the evidence
-// hash of the original upload is X-Original-SHA256. v1 serves the original only.
-const originalHash = served.headers.get("x-original-sha256") ?? served.headers.get("x-content-sha256");
-check("photo served with the original SHA-256", served.status === 200 && originalHash === expected, `status ${served.status}`);
+// v1: X-Content-SHA256 = original. v2: the booking party gets a watermarked copy, so the evidence hash of the
+// original travels as X-Original-SHA256 (media.md §3); the web shows the hash from the snapshot either way.
+check("photo served with the original's SHA-256 header", served.status === 200 && (served.headers.get("x-original-sha256") ?? served.headers.get("x-content-sha256")) === expected, `${served.status} ${served.headers.get("x-original-sha256")}`);
 
 // PostGIS two-way radius search
 const s1 = (await j(`/api/v1/listings/search?lat=-7.7713&lng=110.3776&radiusKm=3`)).body;

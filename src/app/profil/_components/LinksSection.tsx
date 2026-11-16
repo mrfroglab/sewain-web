@@ -1,8 +1,9 @@
 "use client";
 
-import { Bell, ChevronRight, Eye, Heart, LayoutDashboard, LifeBuoy, Megaphone, Package, ShieldCheck, type LucideIcon } from "lucide-react";
+import { Bell, ChevronRight, Eye, Heart, LayoutDashboard, LifeBuoy, Megaphone, Package, Settings, ShieldCheck, type LucideIcon } from "lucide-react";
 import Link from "next/link";
 import { Badge } from "@/components/ui/Badge";
+import { useAppConfig } from "@/lib/config";
 import type { User } from "@/lib/types";
 import { ListBox, SectionTitle } from "./ui";
 
@@ -16,6 +17,8 @@ interface Item {
 
 /** Shortcuts to the rest of the app (mobile list style). */
 export function LinksSection({ user, unread, openRentals }: { user: User; unread: number; openRentals: number }) {
+  // F6.6 needs the v2 account endpoints; the v1 demo keeps its list as is.
+  const fromServer = useAppConfig((s) => s.fromServer);
   const items: Item[] = [
     ...(user.role === "admin" ? [{ href: "/admin", label: "Panel admin", description: "Verifikasi, laporan, sengketa, komisi", icon: ShieldCheck }] : []),
     { href: "/sewaan", label: "Sewaan saya", description: openRentals ? `${openRentals} sedang berjalan` : "Riwayat sewa sebagai penyewa & penyedia", icon: Package, count: openRentals },
@@ -24,6 +27,7 @@ export function LinksSection({ user, unread, openRentals }: { user: User; unread
     { href: "/notifikasi", label: "Notifikasi", description: unread ? `${unread} belum dibaca` : "Semua sudah dibaca", icon: Bell, count: unread },
     { href: "/papan", label: "Papan permintaan", description: "“Ada yang punya…?” dari warga sekitar", icon: Megaphone },
     { href: `/u/${user.id}`, label: "Lihat profil publikku", description: "Seperti yang dilihat pengguna lain", icon: Eye },
+    ...(fromServer ? [{ href: "/profil/pengaturan", label: "Pengaturan akun", description: "Sesi aktif, notifikasi, ekspor data, hapus akun", icon: Settings }] : []),
     { href: "/bantuan", label: "Bantuan", description: "Cara kerja, jaminan, sengketa, privasi", icon: LifeBuoy },
   ];
 

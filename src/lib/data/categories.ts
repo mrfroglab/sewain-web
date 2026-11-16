@@ -124,6 +124,7 @@ export const HANDOVER_LABEL = {
   cod: "COD / ketemuan",
   jemput: "Ambil di tempat penyedia",
   kurir: "Kurir (diurus penyewa)",
+  antar: "Diantar penyedia",
 } as const;
 
 export const ID_CARDS = ["KTM", "SIM", "Kartu pelajar", "Kartu pegawai", "e-KTP"];

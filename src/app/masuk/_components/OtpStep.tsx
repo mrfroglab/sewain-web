@@ -104,7 +104,7 @@ export function OtpStep({ phone, onBack, onVerified }: { phone: string; onBack: 
  * Six visual boxes backed by one real input: native paste, SMS autofill (one-time-code)
  * and backspace all work, including on Android keyboards that do not report key codes.
  */
-function OtpBoxes({ value, onChange, invalid, disabled }: { value: string; onChange: (v: string) => void; invalid?: boolean; disabled?: boolean }) {
+export function OtpBoxes({ value, onChange, invalid, disabled }: { value: string; onChange: (v: string) => void; invalid?: boolean; disabled?: boolean }) {
   const input = useRef<HTMLInputElement>(null);
   const [focused, setFocused] = useState(false);
   useEffect(() => {

@@ -1,10 +1,13 @@
 "use client";
 
 import { Bell, BellRing, CheckCheck, Mail, Smartphone } from "lucide-react";
+import Link from "next/link";
 import { useMemo, useState } from "react";
+import { PushToggle } from "@/components/push/PushToggle";
 import { Button } from "@/components/ui/Button";
 import { Container, EmptyState, PageHeader } from "@/components/ui/Layout";
 import { Tabs } from "@/components/ui/Tabs";
+import { useAppConfig } from "@/lib/config";
 import { isoDate } from "@/lib/format";
 import { useAppStore, useNow } from "@/lib/store";
 import { toast } from "@/lib/toast";
@@ -35,6 +38,8 @@ export function NotificationCenter({ user }: { user: User }) {
   const now = useNow();
   const all = useAppStore((s) => s.notifications);
   const markRead = useAppStore((s) => s.markNotificationsRead);
+  // v2 servers: real web push + preferences (F6.5/F6.6); v1/demo keeps the "segera" chips.
+  const fromServer = useAppConfig((s) => s.fromServer);
   const [filter, setFilter] = useState<Filter>("semua");
   const mine = useMemo(() => all.filter((n) => n.userId === user.id).sort((a, b) => b.at - a.at), [all, user.id]);
   const unread = mine.filter((n) => !n.read).length;
@@ -67,7 +72,16 @@ export function NotificationCenter({ user }: { user: User }) {
           </Button>
         }
       />
-      <Channels />
+      {fromServer ? (
+        <div className="mb-4">
+          <PushToggle />
+          <Link href="/profil/pengaturan#notifikasi" className="mt-2 inline-flex h-9 items-center gap-1 rounded-control text-body-sm font-medium text-ink underline underline-offset-4">
+            Atur jenis notifikasi dan jam tenang
+          </Link>
+        </div>
+      ) : (
+        <Channels />
+      )}
 
       {mine.length === 0 ? (
         <EmptyState icon={<Bell className="size-5" />} title="Belum ada notifikasi" description="Kabar soal request sewa, chat, serah terima, dan sengketa akan muncul di sini." />

@@ -69,7 +69,7 @@ export function DoneStep({ user, result, next }: { user: User; result: VerifyRes
 }
 
 /** Shown when the account was already verified before opening this page. */
-export function VerifiedStatus({ user, next, onRedo }: { user: User; next: string | null; onRedo: () => void }) {
+export function VerifiedStatus({ user, next, onRedo }: { user: User; next: string | null; onRedo?: () => void }) {
   const v = user.verification;
   return (
     <section aria-labelledby="verif-status" className="animate-fade-up">
@@ -94,11 +94,11 @@ export function VerifiedStatus({ user, next, onRedo }: { user: User; next: strin
       <p className="mt-2 text-caption text-smoke">NIK dan nama lengkap hanya terlihat olehmu dan admin.</p>
 
       <Actions next={next} />
-      <div className="mt-4 text-center">
+      {onRedo && <div className="mt-4 text-center">
         <button type="button" onClick={onRedo} className="inline-flex h-9 items-center rounded-control px-3 text-body-sm text-smoke underline underline-offset-4 hover:text-ink">
           Coba lagi alur scan KTP (demo)
         </button>
-      </div>
+      </div>}
     </section>
   );
 }

@@ -13,8 +13,20 @@ import { formatPhone } from "./helpers";
 type Errors = Partial<Record<"name" | "storeName" | "hours" | "email", string>>;
 
 /** Step 3 (new number only): profile basics + account type (FR-A1, FR-A7). */
-export function RegisterStep({ phone, onBack, onRegistered }: { phone: string; onBack: () => void; onRegistered: (userId: string) => void }) {
+export function RegisterStep({
+  phone,
+  onBack,
+  onRegistered,
+  completeFor,
+}: {
+  phone: string;
+  onBack?: () => void;
+  onRegistered: (userId: string) => void;
+  /** real OTP (F6.1): the server already created this account at verify; fill in its profile with updateUser */
+  completeFor?: string;
+}) {
   const registerUser = useAppStore((s) => s.registerUser);
+  const updateUser = useAppStore((s) => s.updateUser);
   const defaultArea = useAppStore((s) => s.search.areaId);
   const [name, setName] = useState("");
   const [accountType, setAccountType] = useState<AccountType>("individu");
@@ -41,14 +53,18 @@ export function RegisterStep({ phone, onBack, onRegistered }: { phone: string; o
     const e = validate();
     setErrors(e);
     if (Object.keys(e).length) return;
-    const res = registerUser({
+    const profile = {
       name: name.trim().replace(/\s+/g, " "),
-      phone,
       email: email.trim() || undefined,
       accountType,
       areaId,
       store: accountType === "toko" ? { name: storeName.trim(), areaId: storeArea, hours: hours.trim() } : undefined,
-    });
+    };
+    if (completeFor) {
+      updateUser(completeFor, profile);
+      return onRegistered(completeFor);
+    }
+    const res = registerUser({ ...profile, phone });
     if (!res.ok) return toast(res.error, "error");
     onRegistered(res.value);
   };
@@ -57,14 +73,16 @@ export function RegisterStep({ phone, onBack, onRegistered }: { phone: string; o
 
   return (
     <section aria-labelledby="daftar-title">
-      <button type="button" onClick={onBack} className="-ml-1 mb-4 inline-flex h-9 items-center gap-1.5 rounded-control px-2 text-body-sm font-medium text-ink hover:bg-soft-gray">
-        <ArrowLeft className="size-4" /> Pakai nomor lain
-      </button>
+      {onBack && (
+        <button type="button" onClick={onBack} className="-ml-1 mb-4 inline-flex h-9 items-center gap-1.5 rounded-control px-2 text-body-sm font-medium text-ink hover:bg-soft-gray">
+          <ArrowLeft className="size-4" /> Pakai nomor lain
+        </button>
+      )}
       <h1 id="daftar-title" className="text-[26px] font-semibold leading-tight tracking-[-0.6px] text-ink">
         Lengkapi akunmu
       </h1>
       <p className="mt-2 text-body text-smoke">
-        Nomor <b className="font-semibold text-ink">{formatPhone(phone)}</b> sudah terverifikasi dan belum terdaftar. Tinggal sedikit lagi.
+        Nomor <b className="font-semibold text-ink">{formatPhone(phone)}</b> {completeFor ? "sudah terdaftar dan terverifikasi" : "sudah terverifikasi dan belum terdaftar"}. Tinggal sedikit lagi.
       </p>
 
       <form onSubmit={submit} className="mt-6 space-y-5" noValidate>
