@@ -95,7 +95,9 @@ export interface ActionResponse {
 export function postAction(name: string, args: unknown[], id?: unknown): Promise<ActionResponse> {
   return enqueue(async () => {
     try {
-      return await request<ActionResponse>(`/api/v1/actions/${name}`, { method: "POST", body: JSON.stringify({ args, id: typeof id === "string" ? id : undefined }) }, true);
+      // keepalive: an action already on the wire survives a reload/tab close right after the tap (flaky 4G, quick
+      // navigation). Bodies are tiny, well under the 64 KB keepalive limit.
+      return await request<ActionResponse>(`/api/v1/actions/${name}`, { method: "POST", keepalive: true, body: JSON.stringify({ args, id: typeof id === "string" ? id : undefined }) }, true);
     } catch (e) {
       return { ok: false, error: e instanceof Error ? e.message : "Server tidak merespons." };
     }
