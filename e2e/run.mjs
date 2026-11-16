@@ -2,6 +2,7 @@
 // sebelum dan sesudah tiap skenario yang mengubah data. Keluar dengan kode 1 kalau ada yang gagal.
 //
 //   node e2e/run.mjs https://sewain-staging.hallojanu.me [outDir]
+//   API_URL=https://sewain-staging.hallojanu.me node e2e/run.mjs http://localhost:3400   # web lokal → API staging
 //
 // Butuh DEMO_MODE di server (login demo + reset). Jangan arahkan ke produksi.
 import { spawnSync } from "node:child_process";
@@ -15,21 +16,24 @@ if (!/^https?:\/\//.test(base)) {
 }
 const out = process.argv[3] ?? path.join(process.env.TMPDIR ?? "/tmp", `sewain-e2e-${Date.now()}`);
 const here = path.dirname(fileURLToPath(import.meta.url));
+/** API origin; same as the web origin behind Caddy, different when a local web build points at staging. */
+const api = (process.env.API_URL ?? base).replace(/\/$/, "");
 
 async function resetDemo() {
-  const login = await fetch(`${base}/api/v1/auth/demo-login`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ userId: "u-admin" }) }).then((r) => r.json());
+  const login = await fetch(`${api}/api/v1/auth/demo-login`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ userId: "u-admin" }) }).then((r) => r.json());
   if (!login.ok) throw new Error(`demo-login gagal: ${JSON.stringify(login)}`);
   for (const name of ["resetClock", "resetDemo"]) {
-    const r = await fetch(`${base}/api/v1/actions/${name}`, { method: "POST", headers: { "Content-Type": "application/json", Authorization: `Bearer ${login.token}` }, body: JSON.stringify({ args: [] }) }).then((x) => x.json());
+    const r = await fetch(`${api}/api/v1/actions/${name}`, { method: "POST", headers: { "Content-Type": "application/json", Authorization: `Bearer ${login.token}` }, body: JSON.stringify({ args: [] }) }).then((x) => x.json());
     if (!r.ok) throw new Error(`${name} gagal: ${JSON.stringify(r)}`);
   }
 }
 
 const suites = [
-  { name: "API kontrak + otorisasi", file: "api.mjs", args: [base] },
+  { name: "API kontrak + otorisasi", file: "api.mjs", args: [api] },
   { name: "Siklus sewa penuh (2 perangkat)", file: "rental-cycle.mjs", args: [base, path.join(out, "rental-cycle")], env: { SEPARATE: "1" } },
   { name: "Sengketa, admin, wizard, daftar, kadaluarsa", file: "dispute-admin-onboarding.mjs", args: [base, path.join(out, "dispute")], env: { SEPARATE: "1" } },
   { name: "Realtime antar perangkat", file: "realtime.mjs", args: [base] },
+  { name: "Antrean aksi tahan reload/offline", file: "offline-queue.mjs", args: [base, api, path.join(out, "offline-queue")] },
 ];
 
 let failed = 0;

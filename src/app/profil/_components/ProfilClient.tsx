@@ -36,11 +36,11 @@ function ProfileView({ user }: { user: User }) {
   return (
     <Container narrow className="py-5 lg:py-10">
       <ProfileHeader user={user} />
-      <StatsRow rating={rating} trust={trust} strikes={user.strikes} className="mt-6" />
+      <StatsRow rating={rating} trust={trust ?? 0} strikes={(user.strikes ?? 0)} className="mt-6" />
       {user.role !== "admin" && <StoreSection key={`store-${user.id}`} user={user} />}
       <PersonalSection key={`me-${user.id}`} user={user} />
       <LinksSection user={user} unread={unread} openRentals={openRentals} />
-      {(myStrikes.length > 0 || user.strikes > 0) && <StrikesSection strikes={myStrikes} />}
+      {(myStrikes.length > 0 || (user.strikes ?? 0) > 0) && <StrikesSection strikes={myStrikes} />}
       <AccountActions />
     </Container>
   );

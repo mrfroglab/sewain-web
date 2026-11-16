@@ -44,7 +44,7 @@ export function UserActionForm({
         <>
           <SeverityPicker value={severity} onChange={onSeverity} />
           <Notice icon={<ShieldAlert className="size-4" />}>
-            Strike {user.name}: {user.strikes} → <span className="font-semibold text-ink">{user.strikes + STRIKE_WEIGHT[severity]}</span>. Pengguna menerima notifikasi berisi alasan ini, dan strike memengaruhi skor kepercayaannya.
+            Strike {user.name}: {(user.strikes ?? 0)} → <span className="font-semibold text-ink">{(user.strikes ?? 0) + STRIKE_WEIGHT[severity]}</span>. Pengguna menerima notifikasi berisi alasan ini, dan strike memengaruhi skor kepercayaannya.
           </Notice>
         </>
       )}

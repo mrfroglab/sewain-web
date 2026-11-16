@@ -1,6 +1,7 @@
 "use client";
 
 import { AlertCircle, FileText, Handshake, House, IdCard, Package, Truck, Wallet } from "lucide-react";
+import { useShallow } from "zustand/react/shallow";
 import { useRouter } from "next/navigation";
 import { useMemo, useState, type ReactNode } from "react";
 import { collateralLine, durationText } from "@/app/barang/[id]/_components/DetailSections";
@@ -11,10 +12,10 @@ import { pillClass } from "@/components/ui/Pill";
 import { CATEGORY_BY_ID, HANDOVER_LABEL } from "@/lib/data/categories";
 import { addDays, diffDays, formatDateRange, isoDate, parseIsoDate, rupiah } from "@/lib/format";
 import { collateralValue, quoteRent } from "@/lib/pricing";
-import { areaLabel, isAvailable, providerLabel } from "@/lib/selectors";
+import { areaLabel, busyRanges, isAvailable, providerLabel } from "@/lib/selectors";
 import { useAppStore, useNow } from "@/lib/store";
 import { toast } from "@/lib/toast";
-import type { Booking, CollateralOption, HandoverMethod, Listing, User } from "@/lib/types";
+import type { CollateralOption, HandoverMethod, Listing, User } from "@/lib/types";
 import { AgreementSummary } from "./AgreementSummary";
 
 const HANDOVER_ICON: Record<HandoverMethod, ReactNode> = {
@@ -56,13 +57,13 @@ function collateralHint(opt: CollateralOption, itemValue: number): string {
 }
 
 /** First free window of the same length within 60 days, offered as a one-tap fix when the dates clash. */
-function findNextFree(bookings: Booking[], listing: Listing, start: string, end: string, today: string): { start: string; end: string } | null {
+function findNextFree(busy: Parameters<typeof isAvailable>[0], listing: Listing, start: string, end: string, today: string): { start: string; end: string } | null {
   const span = Math.round((parseIsoDate(end) - parseIsoDate(start)) / 86_400_000);
   const from = start < today ? today : start;
   for (let i = 1; i <= 60; i++) {
     const s = addDays(from, i);
     const e = addDays(s, span);
-    if (isAvailable({ bookings }, listing, s, e)) return { start: s, end: e };
+    if (isAvailable(busy, listing, s, e)) return { start: s, end: e };
   }
   return null;
 }
@@ -84,7 +85,7 @@ export function RequestForm({ listing, owner, user }: { listing: Listing; owner:
   const router = useRouter();
   const now = useNow();
   const today = isoDate(now);
-  const bookings = useAppStore((s) => s.bookings);
+  const busyInput = useAppStore(useShallow((s) => ({ bookings: s.bookings, listingBusy: s.listingBusy, users: s.users, scope: s.scope, viewerId: s.viewerId })));
   const highValueBadge = useAppStore((s) => s.collateralRules.highValueBadge);
   const createBooking = useAppStore((s) => s.createBooking);
 
@@ -103,8 +104,8 @@ export function RequestForm({ listing, owner, user }: { listing: Listing; owner:
   const days = datesSet && end >= start ? diffDays(start, end) : 0;
   const quote = useMemo(() => (datesSet && end >= start ? quoteRent(listing, start, end) : null), [listing, start, end, datesSet]);
 
-  const clash = datesSet && end >= start && !isAvailable({ bookings }, listing, start, end);
-  const nextFree = clash ? findNextFree(bookings, listing, start, end, today) : null;
+  const clash = datesSet && end >= start && !isAvailable(busyInput, listing, start, end);
+  const nextFree = clash ? findNextFree(busyInput, listing, start, end, today) : null;
 
   // Blocking problems, in the order the renter should fix them (mirrors createBooking's checks, FR-R4).
   const dateProblem = !datesSet
@@ -124,15 +125,13 @@ export function RequestForm({ listing, owner, user }: { listing: Listing; owner:
               : null;
   const problem = dateProblem ?? (!listing.handover.includes(handover) ? "Pilih metode serah terima." : !collateral ? "Pilih bentuk jaminan." : null);
 
+  // Unknown in a scoped snapshot without server data: then nothing is listed and the server checks clashes.
   const busy = useMemo(
     () =>
       listing.stock > 1
         ? []
-        : bookings
-            .filter((b) => b.listingId === listing.id && (b.status === "ACCEPTED" || b.status === "ACTIVE") && b.endDate >= today)
-            .sort((a, b) => a.startDate.localeCompare(b.startDate))
-            .map((b) => formatDateRange(b.startDate, b.endDate)),
-    [bookings, listing.id, listing.stock, today],
+        : (busyRanges(busyInput, listing) ?? []).filter((r) => r.end >= today).map((r) => formatDateRange(r.start, r.end)),
+    [busyInput, listing, today],
   );
 
   const durationPresets = [1, 2, 3, 7].filter((d) => d >= minDays && (!listing.maxDays || d <= listing.maxDays));

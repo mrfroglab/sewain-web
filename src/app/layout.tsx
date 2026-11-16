@@ -3,6 +3,7 @@ import { Inter } from "next/font/google";
 import { DemoDock } from "@/components/shell/DemoDock";
 import { Footer } from "@/components/shell/Footer";
 import { Header } from "@/components/shell/Header";
+import { PendingActions } from "@/components/shell/PendingActions";
 import { StoreBoot } from "@/components/shell/StoreBoot";
 import { TabBar } from "@/components/shell/TabBar";
 import { Toaster } from "@/components/ui/Toaster";
@@ -43,6 +44,7 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
         <Footer />
         <TabBar />
         <DemoDock />
+        <PendingActions />
         <Toaster />
       </body>
     </html>

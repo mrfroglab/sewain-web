@@ -65,7 +65,7 @@ export function InfoPanel({
   user: User | null;
   rating: RatingSummary;
   ownerRating: RatingSummary;
-  ownerTrust: number;
+  ownerTrust: number | null;
   distanceKm: number;
   originLabel: string;
   highValue: boolean;

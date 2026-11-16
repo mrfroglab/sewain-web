@@ -80,9 +80,9 @@ function PartyCard({ user, side }: { user: User; side: string }) {
         <div>
           <div className="flex items-center justify-between gap-3">
             <span className="text-smoke">Skor kepercayaan</span>
-            <span className="font-semibold tabular-nums text-ink">{stats.trust}/100</span>
+            <span className="font-semibold tabular-nums text-ink">{stats.trust ?? "–"}/100</span>
           </div>
-          <Bar value={stats.trust} max={100} className="mt-1.5" />
+          <Bar value={stats.trust ?? 0} max={100} className="mt-1.5" />
         </div>
         <div className="flex items-center justify-between gap-3">
           <span className="text-smoke">Strike</span>

@@ -50,9 +50,10 @@ export async function detectApi(): Promise<boolean> {
   }
 }
 
+/** Snapshot for the signed-in user of this tab (v2 scopes it per viewer; v1 ignores the token). */
 export async function fetchState<T>(): Promise<T | null> {
   try {
-    return await request<T>("/api/v1/state");
+    return await request<T>("/api/v1/state", {}, true);
   } catch {
     return null;
   }
@@ -69,21 +70,7 @@ export async function demoLogin(userId: string): Promise<string | null> {
   }
 }
 
-/* ------------------------------------------------------------ ordered queue */
-
-// Commands are sent one at a time, in the order the user performed them (e.g. register → login, checkout → agree).
-let chain: Promise<unknown> = Promise.resolve();
-let pending = 0;
-export const pendingCommands = () => pending;
-
-function enqueue<T>(fn: () => Promise<T>): Promise<T> {
-  pending++;
-  const run = chain.then(fn, fn);
-  chain = run.catch(() => undefined).finally(() => {
-    pending--;
-  });
-  return run;
-}
+/* ------------------------------------------------------------------ actions */
 
 export interface ActionResponse {
   ok: boolean;
@@ -92,16 +79,60 @@ export interface ActionResponse {
   version?: number;
 }
 
-export function postAction(name: string, args: unknown[], id?: unknown): Promise<ActionResponse> {
-  return enqueue(async () => {
-    try {
-      // keepalive: an action already on the wire survives a reload/tab close right after the tap (flaky 4G, quick
-      // navigation). Bodies are tiny, well under the 64 KB keepalive limit.
-      return await request<ActionResponse>(`/api/v1/actions/${name}`, { method: "POST", keepalive: true, body: JSON.stringify({ args, id: typeof id === "string" ? id : undefined }) }, true);
-    } catch (e) {
-      return { ok: false, error: e instanceof Error ? e.message : "Server tidak merespons." };
-    }
-  });
+export type ActionSendResult =
+  | { kind: "response"; status: number; body: ActionResponse }
+  /** fetch failed: offline, DNS, CORS, connection reset. `timeout` = the request may have reached the server. */
+  | { kind: "network"; timeout: boolean; error: string };
+
+/**
+ * One attempt at POST /api/v1/actions/{name}. Used by the persistent outbox (lib/outbox.ts), which owns ordering,
+ * retries and the Idempotency-Key. The key also travels in the body: a custom header needs CORS approval that v1
+ * does not give, so the header is only sent when `keyHeader` is true (same origin, or a v2 server).
+ */
+export async function sendAction(input: { name: string; args: unknown[]; id?: string; key: string; token: string | null; keyHeader: boolean }): Promise<ActionSendResult> {
+  const headers = new Headers({ "Content-Type": "application/json" });
+  if (input.token) headers.set("Authorization", `Bearer ${input.token}`);
+  if (input.keyHeader) headers.set("Idempotency-Key", input.key);
+  try {
+    // keepalive: an action already on the wire survives a reload/tab close right after the tap (flaky 4G, quick
+    // navigation). Bodies are tiny, well under the 64 KB keepalive limit.
+    const res = await fetch(apiUrl(`/api/v1/actions/${input.name}`), {
+      method: "POST",
+      headers,
+      keepalive: true,
+      cache: "no-store",
+      body: JSON.stringify({ args: input.args, id: input.id, idempotencyKey: input.key }),
+      signal: AbortSignal.timeout(15_000),
+    });
+    const body = (await res.json().catch(() => ({ ok: false, error: `HTTP ${res.status}` }))) as ActionResponse;
+    return { kind: "response", status: res.status, body: body && typeof body === "object" ? body : { ok: false, error: `HTTP ${res.status}` } };
+  } catch (e) {
+    const timeout = e instanceof DOMException && (e.name === "TimeoutError" || e.name === "AbortError");
+    return { kind: "network", timeout, error: e instanceof Error ? e.message : "Server tidak merespons." };
+  }
+}
+
+/* -------------------------------------------------------------------- config */
+
+export interface ServerConfig {
+  appEnv?: string;
+  demoMode?: boolean;
+  paymentMode?: string;
+  auth?: { otpProvider?: string };
+  push?: { vapidPublicKey?: string } | null;
+  legal?: { termsVersion?: string; privacyVersion?: string };
+}
+
+/** GET /api/v1/config (v2). null on v1 (404) or when unreachable. */
+export async function fetchConfig(): Promise<ServerConfig | null> {
+  try {
+    const res = await fetch(apiUrl("/api/v1/config"), { cache: "no-store", signal: AbortSignal.timeout(4000) });
+    if (!res.ok) return null;
+    const body = (await res.json()) as ServerConfig & { ok?: boolean };
+    return body && body.ok !== false ? body : null;
+  } catch {
+    return null;
+  }
 }
 
 /* --------------------------------------------------------------------- photos */

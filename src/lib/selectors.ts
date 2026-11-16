@@ -11,6 +11,7 @@ import type {
   AccountType,
   Booking,
   BookingStatus,
+  BusyRange,
   CategoryId,
   CollateralKind,
   DataState,
@@ -40,6 +41,7 @@ export const isVerified = (u?: User | null) => u?.verification.status === "terve
 
 /** FR-T2: a review is visible once both sides reviewed, or 7 days after it was written. */
 export function isReviewVisible(r: Review, all: Review[], now: number): boolean {
+  if (r.visibleAt != null) return now >= r.visibleAt;
   if (now - r.createdAt >= 7 * D) return true;
   return all.some((o) => o.bookingId === r.bookingId && o.fromId !== r.fromId);
 }
@@ -69,22 +71,58 @@ export function listingRating(s: Pick<DataState, "reviews">, listing: Listing, n
   return combine(listing.baseRating, listing.baseRatingCount, visibleReviews(s, now, (r) => r.listingId === listing.id && r.fromRole === "penyewa"));
 }
 
-/** Simple trust score (P1): rating, completed rentals, disputes, strikes → 0–100. */
-export function trustScore(s: Pick<DataState, "users" | "reviews" | "bookings" | "disputes">, userId: ID, now: number): number {
+/** Which snapshot the selectors read from (see DataState.scope). */
+type ScopeInfo = Partial<Pick<DataState, "scope" | "viewerId">>;
+
+/**
+ * Can aggregates about `userId` be computed from local data? Yes for a full (v1) snapshot, for the viewer's own
+ * account (all their bookings are in the snapshot) and for admins. Otherwise other people's bookings are missing
+ * and a local count would be silently wrong.
+ */
+function canComputeFor(s: ScopeInfo & Pick<DataState, "users">, userId: ID): boolean {
+  if (s.scope !== "scoped") return true;
+  if (userId === s.viewerId) return true;
+  return findUser(s, s.viewerId ?? undefined)?.role === "admin";
+}
+
+export interface UserStats {
+  /** completed rentals (as renter or provider), seeded history included; null = unknown in this snapshot */
+  completedRentals: number | null;
+  /** 0–100 (FR-T3); null = unknown in this snapshot */
+  trustScore: number | null;
+}
+
+/** Public reputation numbers. Prefers server aggregates (v2 `publicStats`), never guesses from partial data. */
+export function userStats(s: Pick<DataState, "users" | "reviews" | "bookings" | "disputes"> & ScopeInfo, userId: ID, now: number): UserStats {
   const u = findUser(s, userId);
-  if (!u) return 0;
-  const { rating, count } = userRating(s, userId, now);
+  if (!u) return { completedRentals: null, trustScore: null };
+  if (u.publicStats && !canComputeFor(s, userId)) return { completedRentals: u.publicStats.completedRentals, trustScore: u.publicStats.trustScore };
+  if (!canComputeFor(s, userId)) return { completedRentals: null, trustScore: null };
   const completed = s.bookings.filter((b) => (b.renterId === userId || b.providerId === userId) && b.status === "COMPLETED").length + (u.baseRatingCount ?? 0);
   const disputes = s.disputes.filter((d) => {
     const b = s.bookings.find((x) => x.id === d.bookingId);
     return b && (b.renterId === userId || b.providerId === userId);
   }).length;
+  const { rating, count } = userRating(s, userId, now);
   let score = 40;
   if (u.verification.status === "terverifikasi") score += 20;
   if (count) score += (rating - 3) * 12;
   score += Math.min(15, completed);
-  score -= disputes * 4 + u.strikes * 10;
-  return Math.max(0, Math.min(100, Math.round(score)));
+  score -= disputes * 4 + (u.strikes ?? 0) * 10;
+  return { completedRentals: completed, trustScore: Math.max(0, Math.min(100, Math.round(score))) };
+}
+
+/** Simple trust score (P1): rating, completed rentals, disputes, strikes → 0–100. null when unknown (scoped snapshot). */
+export function trustScore(s: Pick<DataState, "users" | "reviews" | "bookings" | "disputes"> & ScopeInfo, userId: ID, now: number): number | null {
+  return userStats(s, userId, now).trustScore;
+}
+
+/** Strike count shown on a public profile: only when this snapshot carries it (own/admin/full, or server says public). */
+export function publicStrikes(s: Pick<DataState, "users"> & ScopeInfo, userId: ID): number | null {
+  const u = findUser(s, userId);
+  if (!u) return null;
+  if (u.strikes != null) return u.strikes;
+  return u.publicStats?.strikes ?? null;
 }
 
 /* --------------------------------------------------------------- listings */
@@ -115,17 +153,40 @@ export interface ListingHit {
 
 const norm = (t: string) => t.toLowerCase().normalize("NFKD").replace(/[̀-ͯ]/g, "");
 
-/** Is the listing free for [start, end]? Stock-aware (FR-R4). */
-export function isAvailable(s: Pick<DataState, "bookings">, listing: Listing, start: string, end: string): boolean {
-  const busy = s.bookings.filter(
-    (b) => b.listingId === listing.id && ["ACCEPTED", "ACTIVE"].includes(b.status) && b.startDate <= end && start <= b.endDate,
-  ).length;
+type BusyInput = Pick<DataState, "bookings"> & Partial<Pick<DataState, "listingBusy" | "users">> & ScopeInfo;
+
+/**
+ * Committed date ranges of a listing (ACCEPTED/ACTIVE), oldest first. Uses the server's `listingBusy` when present.
+ * null = unknown: in a scoped snapshot other renters' bookings are not visible, so the server decides.
+ */
+export function busyRanges(s: BusyInput, listing: Listing): BusyRange[] | null {
+  const server = s.listingBusy?.[listing.id];
+  if (server) return [...server].sort((a, b) => a.start.localeCompare(b.start));
+  if (s.listingBusy) return [];
+  // The provider (or an admin) sees every booking of their own listing even in a scoped snapshot.
+  if (s.scope === "scoped" && listing.ownerId !== s.viewerId && findUser({ users: s.users ?? [] }, s.viewerId ?? undefined)?.role !== "admin") return null;
+  return s.bookings
+    .filter((b) => b.listingId === listing.id && (b.status === "ACCEPTED" || b.status === "ACTIVE"))
+    .map((b) => ({ start: b.startDate, end: b.endDate, count: 1 }))
+    .sort((a, b) => a.start.localeCompare(b.start));
+}
+
+/** Is the listing free for [start, end]? Stock-aware (FR-R4). Unknown availability counts as free (server checks). */
+export function isAvailable(s: BusyInput, listing: Listing, start: string, end: string): boolean {
+  const ranges = busyRanges(s, listing);
+  if (!ranges) return true;
+  const busy = ranges.filter((r) => r.start <= end && start <= r.end).reduce((n, r) => n + r.count, 0);
   return busy < listing.stock;
 }
 
+/** Owner status; a scoped snapshot may leave it out for public profiles (the server only sends live listings then). */
+const ownerActive = (s: Pick<DataState, "users">, ownerId: ID) => {
+  const u = findUser(s, ownerId);
+  return !u || !u.status || u.status === "aktif";
+};
+
 /** Listings that are live and owned by an active user. */
-export const liveListings = (s: Pick<DataState, "listings" | "users">) =>
-  s.listings.filter((l) => l.status === "aktif" && findUser(s, l.ownerId)?.status === "aktif");
+export const liveListings = (s: Pick<DataState, "listings" | "users">) => s.listings.filter((l) => l.status === "aktif" && ownerActive(s, l.ownerId));
 
 export function distanceTo(listing: Listing, search: Pick<SearchPrefs, "point">) {
   return distanceKm(search.point, listing.location);
@@ -136,7 +197,7 @@ export function distanceTo(listing: Listing, search: Pick<SearchPrefs, "point">)
  * Returns visible hits plus how many matches were hidden only by the provider's reach.
  */
 export function searchListings(
-  s: Pick<DataState, "listings" | "users" | "reviews" | "bookings" | "search">,
+  s: Pick<DataState, "listings" | "users" | "reviews" | "bookings" | "search"> & Partial<Pick<DataState, "listingBusy">> & ScopeInfo,
   filters: ListingFilters,
   now: number,
   search: SearchPrefs = s.search,

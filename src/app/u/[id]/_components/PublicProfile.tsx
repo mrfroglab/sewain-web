@@ -15,7 +15,7 @@ import { Container, EmptyState, Notice, SectionHeading } from "@/components/ui/L
 import { Stars } from "@/components/ui/Stars";
 import { areaName } from "@/lib/data/areas";
 import { number } from "@/lib/format";
-import { distanceTo, findUser, isVerified, listingRating, liveListings, providerLabel, publicName, trustScore, userRating, visibleReviews } from "@/lib/selectors";
+import { distanceTo, findUser, isVerified, listingRating, liveListings, providerLabel, publicName, publicStrikes, userRating, userStats, visibleReviews } from "@/lib/selectors";
 import { useCurrentUser } from "@/lib/session";
 import { useAppStore, useNow } from "@/lib/store";
 
@@ -33,7 +33,7 @@ function ProfileBody({ id }: { id: string }) {
   const now = useNow();
   const [reporting, setReporting] = useState(false);
   const data = useAppStore(
-    useShallow((s) => ({ listings: s.listings, users: s.users, reviews: s.reviews, bookings: s.bookings, disputes: s.disputes, search: s.search })),
+    useShallow((s) => ({ listings: s.listings, users: s.users, reviews: s.reviews, bookings: s.bookings, disputes: s.disputes, search: s.search, scope: s.scope, viewerId: s.viewerId })),
   );
   const person = findUser(data, id);
 
@@ -43,13 +43,13 @@ function ProfileBody({ id }: { id: string }) {
       .filter((l) => l.ownerId === person.id)
       .map((l) => ({ listing: l, distanceKm: distanceTo(l, data.search), rating: listingRating(data, l, now) }))
       .sort((a, b) => b.listing.createdAt - a.listing.createdAt);
-    const completed =
-      data.bookings.filter((b) => (b.renterId === person.id || b.providerId === person.id) && b.status === "COMPLETED").length + (person.baseRatingCount ?? 0);
+    const stats = userStats(data, person.id, now);
     return {
       listings,
-      completed,
+      completed: stats.completedRentals,
+      strikes: publicStrikes(data, person.id),
       rating: userRating(data, person.id, now),
-      trust: trustScore(data, person.id, now),
+      trust: stats.trustScore,
       reviews: visibleReviews(data, now, (r) => r.toId === person.id),
     };
   }, [person, data, now]);
@@ -97,7 +97,7 @@ function ProfileBody({ id }: { id: string }) {
                 Early Lender
               </Badge>
             )}
-            {person.strikes > 0 && <Badge tone="outline">Pernah bersengketa · {person.strikes} strike</Badge>}
+            {(view.strikes ?? 0) > 0 && <Badge tone="outline">Pernah bersengketa · {view.strikes} strike</Badge>}
           </div>
           <ul className="mt-3 space-y-1 text-body-sm text-graphite">
             <li className="flex items-center gap-2">
@@ -139,25 +139,25 @@ function ProfileBody({ id }: { id: string }) {
           <dt className="text-caption text-smoke">Skor kepercayaan</dt>
           <dd className="mt-1">
             <span className="block text-[20px] font-bold leading-none text-ink">
-              {view.trust}
-              <span className="text-caption font-normal text-smoke">/100</span>
+              {view.trust ?? "–"}
+              {view.trust != null && <span className="text-caption font-normal text-smoke">/100</span>}
             </span>
             <span className="mt-1.5 block h-1 overflow-hidden rounded-full bg-soft-gray" aria-hidden>
-              <span className="block h-full rounded-full bg-ink" style={{ width: `${view.trust}%` }} />
+              <span className="block h-full rounded-full bg-ink" style={{ width: `${view.trust ?? 0}%` }} />
             </span>
           </dd>
         </div>
         <div className="px-3 py-3.5 sm:px-5">
           <dt className="text-caption text-smoke">Sewa selesai</dt>
           <dd className="mt-1">
-            <span className="block text-[20px] font-bold leading-none text-ink">{number(view.completed)}</span>
+            <span className="block text-[20px] font-bold leading-none text-ink">{view.completed != null ? number(view.completed) : "–"}</span>
             <span className="mt-1 block text-micro text-smoke">sebagai penyewa & penyedia</span>
           </dd>
         </div>
       </dl>
       <p className="mt-2 text-caption text-ash">Skor dihitung dari verifikasi, rating, jumlah sewa selesai, sengketa, dan strike.</p>
 
-      {person.status !== "aktif" && (
+      {person.status && person.status !== "aktif" && (
         <Notice className="mt-6" title={person.status === "suspend" ? "Akun sedang ditangguhkan" : "Akun diblokir"}>
           Barang dari akun ini tidak bisa disewa untuk sementara.
         </Notice>

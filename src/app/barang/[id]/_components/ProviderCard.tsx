@@ -11,7 +11,7 @@ import type { User } from "@/lib/types";
 import { memberSince } from "@/app/barang/_components/util";
 
 /** Provider summary on the listing page. Only the public name + "Terverifikasi" are shown (FR-A5). */
-export function ProviderCard({ owner, rating, trust }: { owner: User; rating: RatingSummary; trust: number }) {
+export function ProviderCard({ owner, rating, trust }: { owner: User; rating: RatingSummary; trust: number | null }) {
   const isStore = owner.accountType === "toko" && !!owner.store;
   return (
     <Link href={`/u/${owner.id}`} className="group flex items-start gap-3 rounded-card border border-border-gray bg-white p-4 transition-colors hover:border-ink">
@@ -31,9 +31,11 @@ export function ProviderCard({ owner, rating, trust }: { owner: User; rating: Ra
         </p>
         <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1">
           <Stars rating={rating.rating} count={rating.count} />
-          <span className="inline-flex items-center gap-1 text-caption text-graphite">
-            <ShieldCheck className="size-3.5" /> Skor kepercayaan {trust}/100
-          </span>
+          {trust != null && (
+            <span className="inline-flex items-center gap-1 text-caption text-graphite">
+              <ShieldCheck className="size-3.5" /> Skor kepercayaan {trust}/100
+            </span>
+          )}
         </div>
         {isStore && owner.store && (
           <p className="mt-1.5 inline-flex items-center gap-1 text-caption text-smoke">

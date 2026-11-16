@@ -106,6 +106,6 @@ export function initials(name: string): string {
 export const maskNik = (nik: string) => (nik.length >= 8 ? `${nik.slice(0, 4)}${"*".repeat(nik.length - 8)}${nik.slice(-4)}` : nik);
 
 /** "081234567890" → "0812-****-7890" */
-export const maskPhone = (p: string) => (p.length >= 8 ? `${p.slice(0, 4)}-****-${p.slice(-4)}` : p);
+export const maskPhone = (p?: string) => (!p ? "-" : p.length >= 8 ? `${p.slice(0, 4)}-****-${p.slice(-4)}` : p);
 
 export const plural = (n: number, word: string) => `${number(n)} ${word}`;

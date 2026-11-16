@@ -62,13 +62,13 @@ export function StrikeSheet({
     if (open) setSeverity(defaultSeverity);
   }
   if (!user) return null;
-  const after = user.strikes + STRIKE_WEIGHT[severity];
+  const after = (user.strikes ?? 0) + STRIKE_WEIGHT[severity];
   return (
     <ReasonSheet
       open={open}
       onClose={onClose}
       title={`Beri strike ke ${publicName(user)}`}
-      description={`${user.name} · sekarang ${user.strikes} strike → jadi ${after} strike.`}
+      description={`${user.name} · sekarang ${(user.strikes ?? 0)} strike → jadi ${after} strike.`}
       presets={STRIKE_PRESETS}
       initial={defaultReason}
       confirmLabel="Beri strike"

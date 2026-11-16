@@ -8,7 +8,7 @@ import { useAppStore, useNow } from "@/lib/store";
 /** Slices searchListings needs. useShallow keeps the object stable until one of them changes. */
 export function useSearchSlices() {
   return useAppStore(
-    useShallow((s) => ({ listings: s.listings, users: s.users, reviews: s.reviews, bookings: s.bookings, search: s.search })),
+    useShallow((s) => ({ listings: s.listings, users: s.users, reviews: s.reviews, bookings: s.bookings, search: s.search, scope: s.scope, viewerId: s.viewerId, listingBusy: s.listingBusy })),
   );
 }
 

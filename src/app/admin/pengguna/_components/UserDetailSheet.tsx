@@ -157,12 +157,12 @@ export function UserDetailSheet({ user, onClose }: { user: User; onClose: () => 
                       i === step ? "bg-ink text-white" : i < step ? "border border-ink text-ink" : "bg-soft-gray text-ash",
                     )}
                   >
-                    {i === 1 && user.strikes > 0 ? `${user.strikes} strike` : label}
+                    {i === 1 && (user.strikes ?? 0) > 0 ? `${(user.strikes ?? 0)} strike` : label}
                   </li>
                 ))}
               </ol>
-              {user.status === "aktif" && user.strikes >= SUSPEND_HINT_AT && (
-                <p className="mt-2 text-caption text-graphite">Sudah {user.strikes} strike. Pertimbangkan suspend sebelum blacklist.</p>
+              {user.status === "aktif" && (user.strikes ?? 0) >= SUSPEND_HINT_AT && (
+                <p className="mt-2 text-caption text-graphite">Sudah {(user.strikes ?? 0)} strike. Pertimbangkan suspend sebelum blacklist.</p>
               )}
             </section>
           )}
@@ -213,7 +213,7 @@ export function UserDetailSheet({ user, onClose }: { user: User; onClose: () => 
           </div>
 
           <section>
-            <p className="mb-2 text-caption font-semibold uppercase tracking-[0.08em] text-smoke">Riwayat strike ({user.strikes} poin)</p>
+            <p className="mb-2 text-caption font-semibold uppercase tracking-[0.08em] text-smoke">Riwayat strike ({(user.strikes ?? 0)} poin)</p>
             {stats.strikes.length ? (
               <ul className="divide-y divide-border-gray rounded-[12px] border border-border-gray">
                 {stats.strikes.map((s) => (

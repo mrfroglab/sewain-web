@@ -16,11 +16,13 @@ ws.onmessage = (m) => events.push(JSON.parse(m.data));
 await new Promise((r) => (ws.onopen = r));
 
 const raka = await login("u-raka"), bayu = await login("u-bayu"), admin = await login("u-admin");
+// v2 scopes the snapshot per viewer (ROADMAP §4): always read it as the user whose data is being checked.
+const stateAs = async (token) => (await j("/api/v1/state", {}, token)).body;
 check("demo-login returns tokens", raka && bayu && admin);
 const forged = await act(raka, "acceptBooking", ["u-bayu", "b-requested"]);
 check("actor must match session (403)", forged.status === 403, JSON.stringify(forged));
 const iso = (d) => new Date(Date.now() + d * 864e5).toLocaleDateString("sv-SE", { timeZone: "Asia/Jakarta" });
-const st = (await j("/api/v1/state")).body;
+const st = await stateAs(raka);
 const listing = st.listings.find((l) => l.id === "l-kompor-lapangan");
 const created = await act(raka, "createBooking", ["u-raka", { listingId: listing.id, startDate: iso(1), endDate: iso(3), handover: "jemput", collateralOptionId: listing.collateralOptions[0].id }], "b-testapi12345");
 check("createBooking keeps client id", created.body.ok && created.body.value === "b-testapi12345", JSON.stringify(created.body));
@@ -28,9 +30,10 @@ const dup = await act(raka, "createBooking", ["u-raka", { listingId: "l-laptop",
 check("rule violation → ok:false with message", dup.body.ok === false && /lewat|jaminan/i.test(dup.body.error), JSON.stringify(dup.body));
 const acc = await act(bayu, "acceptBooking", ["u-bayu", "b-testapi12345"]);
 check("provider accepts", acc.body.ok, JSON.stringify(acc.body));
-const st2 = (await j("/api/v1/state")).body;
+const st2 = await stateAs(raka);
 const b = st2.bookings.find((x) => x.id === "b-testapi12345");
 check("state shows ACCEPTED + meeting point + agreement hash", b?.status === "ACCEPTED" && b.meetingPointDetail && /^[0-9a-f]{64}$/.test(b.agreement.hash), JSON.stringify(b?.status));
+check(`snapshot scope: ${st2.scope ?? "full (v1)"}`, !st2.scope || (st2.scope === "scoped" && st2.viewerId === "u-raka"));
 check("system messages + notification created", st2.messages.some((m) => m.bookingId === b.id && m.senderId === "system") && st2.notifications.some((n) => n.userId === "u-raka" && /disetujui/i.test(n.title)));
 
 // Photo evidence upload: server computes SHA-256 + timestamp
@@ -49,7 +52,7 @@ const s1 = (await j(`/api/v1/listings/search?lat=-7.7713&lng=110.3776&radiusKm=3
 const s2 = (await j(`/api/v1/listings/search?lat=-7.7596&lng=110.3727&radiusKm=3`)).body;
 check(`PostGIS search from UGM 3km: ${s1.hits?.length} hits, hidden ${s1.hiddenByProviderReach}`, s1.ok && s1.hits.length > 30);
 // Every hit must also be within its provider's own reach; listings beyond it are counted as hidden.
-const reach = new Map((await j("/api/v1/state")).body.listings.map((l) => [l.id, l.radiusKm]));
+const reach = new Map((await stateAs(raka)).listings.map((l) => [l.id, l.radiusKm]));
 const beyondReach = s2.hits?.filter((h) => h.distanceKm > (reach.get(h.id) ?? Infinity) + 1e-6) ?? [];
 check(`two-way rule from Pogung: hidden ${s2.hiddenByProviderReach}, all hits within provider reach`, s2.ok && s2.hiddenByProviderReach >= 1 && beyondReach.length === 0, JSON.stringify(beyondReach));
 const s3 = (await j(`/api/v1/listings/search?lat=-7.7713&lng=110.3776&radiusKm=5&kategori=kamera&jaminan=cukup-identitas`)).body;
@@ -59,11 +62,11 @@ check(`filters (kategori kamera + cukup identitas): ${s3.hits?.length} hits`, s3
 const notAdmin = await act(raka, "updateCommission", ["u-raka", { active: true }]);
 check("non-admin cannot change commission", notAdmin.body.ok === false);
 const com = await act(admin, "updateCommission", ["u-admin", { active: true, percent: 10 }]);
-const st3 = (await j("/api/v1/state")).body;
+const st3 = await stateAs(admin);
 check("admin changes commission + audit log", com.body.ok && st3.commission.active === true && st3.audit[0].action === "komisi.ubah");
 await act(admin, "updateCommission", ["u-admin", { active: false }]);
 const clk = await act(bayu, "advanceClock", [25 * 3600000]);
-const st4 = (await j("/api/v1/state")).body;
+const st4 = await stateAs(bayu);
 check("advanceClock +25h → b-requested EXPIRED (job berkala)", clk.body.ok && st4.bookings.find((x) => x.id === "b-requested").status === "EXPIRED");
 await act(bayu, "resetClock", []);
 await new Promise((r) => setTimeout(r, 400));

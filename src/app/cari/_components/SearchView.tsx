@@ -32,7 +32,7 @@ export function SearchView() {
 
 function SearchContent() {
   const { filters, view, update, clear, reset, activeCount } = useSearchState();
-  const data = useAppStore(useShallow((s) => ({ listings: s.listings, users: s.users, reviews: s.reviews, bookings: s.bookings, search: s.search })));
+  const data = useAppStore(useShallow((s) => ({ listings: s.listings, users: s.users, reviews: s.reviews, bookings: s.bookings, search: s.search, scope: s.scope, viewerId: s.viewerId, listingBusy: s.listingBusy })));
   const setSearch = useAppStore((s) => s.setSearch);
   const now = useNow();
   const [sheet, setSheet] = useState<FilterKey | null>(null);

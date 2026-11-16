@@ -40,7 +40,7 @@ export function PhoneStep({
     setError(null);
   };
 
-  const fillNew = () => fill(randomPhone(useAppStore.getState().users.map((u) => u.phone)));
+  const fillNew = () => fill(randomPhone(useAppStore.getState().users.flatMap((u) => (u.phone ? [u.phone] : []))));
 
   return (
     <section aria-labelledby="masuk-hp">
@@ -79,8 +79,8 @@ export function PhoneStep({
       <Notice icon={<FlaskConical className="size-4" />} title="Mode demo: OTP tanpa SMS" className="mt-5 max-w-md">
         <p>Kodenya ditampilkan di layar berikutnya. Coba salah satu:</p>
         <div className="mt-2 flex flex-wrap gap-2">
-          {sample && (
-            <button type="button" onClick={() => fill(sample.phone)} className="inline-flex h-9 items-center rounded-control border border-border-gray bg-white px-3 text-caption font-medium text-ink hover:border-ink">
+          {sample?.phone && (
+            <button type="button" onClick={() => fill(sample.phone!)} className="inline-flex h-9 items-center rounded-control border border-border-gray bg-white px-3 text-caption font-medium text-ink hover:border-ink">
               Nomor {publicName(sample)} (sudah terdaftar)
             </button>
           )}
