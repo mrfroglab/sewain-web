@@ -94,7 +94,7 @@ export function RenterPaymentBlock({ view, onPay }: { view: BookingView; onPay: 
         <div className="min-w-0">
           <p className="text-body-sm font-semibold text-ink">{mode === "gateway" ? "Bayar via Sewain segera hadir" : "Bayar langsung ke penyedia setelah barang di tangan"}</p>
           <p className="mt-0.5 text-caption text-smoke">
-            Sewa{p.deposit > 0 ? " + deposit uang" : ""}, dibayar tunai atau transfer saat serah terima. Serah terima tetap bisa jalan; langkah ini tidak menahan check-out.
+            Sewa{p.deposit > 0 ? " + deposit uang" : ""}, dibayar tunai atau transfer saat serah terima. Serah terima tetap bisa jalan walau belum ditandai bayar.
           </p>
         </div>
         <p className="shrink-0 text-body font-semibold text-ink">{rupiah(p.total)}</p>

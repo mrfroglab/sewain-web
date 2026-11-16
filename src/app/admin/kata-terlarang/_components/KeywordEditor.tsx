@@ -59,7 +59,7 @@ export function KeywordEditor() {
         subtitle="Listing yang judul atau deskripsinya mengandung kata ini tertahan filter dan ditandai untuk ditinjau. Perubahan berlaku setelah disimpan dan tercatat di log audit."
       />
 
-      <div className="grid gap-10 lg:grid-cols-[minmax(0,1.1fr)_minmax(0,1fr)] lg:gap-12">
+      <div className="grid grid-cols-[minmax(0,1fr)] gap-10 lg:grid-cols-[minmax(0,1.1fr)_minmax(0,1fr)] lg:gap-12">
         <AdminSection title={`Daftar kata (${draft.length})`} description="Ketuk silang untuk menghapus. Bisa tambah beberapa sekaligus, pisahkan dengan koma.">
           <form onSubmit={add} className="flex gap-2">
             <label htmlFor="kata-baru" className="sr-only">
