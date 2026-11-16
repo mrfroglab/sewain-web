@@ -1,6 +1,7 @@
 // Disputes (L1 + admin L2), listing wizard, registration + eKYC skip, 24h expiry via demo clock.
 import { chromium } from "playwright";
 import fs from "node:fs";
+import { randomPhone, serverConfig, signUpWithOtp } from "./otp-helpers.mjs";
 const [base, out] = process.argv.slice(2);
 fs.mkdirSync(out, { recursive: true });
 const browser = await chromium.launch({ ...(process.env.CHROMIUM_PATH ? { executablePath: process.env.CHROMIUM_PATH } : {}), headless: true });
@@ -94,15 +95,21 @@ await step("Bu Tini membuat listing lewat wizard 5 langkah", async () => {
   await T.waitForURL(/\/barang\/l-/, { timeout: 8000 });
   await T.getByText("Termos nasi besar 10 liter").first().waitFor();
 });
-await step("Tamu daftar: nomor HP → OTP 123456 → buat akun → eKYC 'Lewati (demo)'", async () => {
-  await go(G, "/masuk");
-  await G.getByLabel("Nomor HP").fill("081299990011");
-  await btn(G, "Kirim OTP").click();
-  await G.getByLabel("Kode OTP 6 digit").fill("123456");
-  await btn(G, "Verifikasi").click();
-  await G.getByLabel("Nama lengkap").fill("Putra Wijaya");
-  await btn(G, "Buat akun").click();
-  await G.waitForURL(/\/verifikasi/, { timeout: 8000 });
+// Real OTP servers (v2, provider "echo") have no fixed 123456: register through the OTP flow, then skip eKYC.
+const cfg = await serverConfig(process.env.API_URL ?? base);
+const realOtp = !!cfg && (!cfg.demoMode || (cfg.auth?.otpProvider && cfg.auth.otpProvider !== "demo"));
+await step(realOtp ? "Tamu daftar: nomor HP → kode uji staging → S&K → nama → eKYC 'Lewati (demo)'" : "Tamu daftar: nomor HP → OTP 123456 → buat akun → eKYC 'Lewati (demo)'", async () => {
+  if (realOtp) await signUpWithOtp(G, base, { phone: randomPhone(), name: "Putra Wijaya" });
+  else {
+    await go(G, "/masuk");
+    await G.getByLabel("Nomor HP").fill("081299990011");
+    await btn(G, "Kirim OTP").click();
+    await G.getByLabel("Kode OTP 6 digit").fill("123456");
+    await btn(G, "Verifikasi").click();
+    await G.getByLabel("Nama lengkap").fill("Putra Wijaya");
+    await btn(G, "Buat akun").click();
+    await G.waitForURL(/\/verifikasi/, { timeout: 8000 });
+  }
   await G.waitForTimeout(800);
   await btn(G, "Lewati (demo)").first().click();
   await G.getByText(/Terverifikasi/i).first().waitFor();

@@ -11,7 +11,7 @@ const out = process.argv[3] ?? `${process.env.TMPDIR ?? "/tmp"}/sewain-routes-sm
 fs.mkdirSync(out, { recursive: true });
 
 const common = ["/", "/cari", "/cari?mulai=2030-01-01&selesai=2030-01-03", "/barang/l-kompor-lapangan", "/barang/l-kompor-lapangan/ajukan", "/u/u-bayu", "/u/u-tini", "/papan", "/bantuan", "/masuk", "/syarat", "/privasi"];
-const signedIn = ["/favorit", "/chat", "/notifikasi", "/profil", "/sewaan", "/verifikasi", "/penyedia", "/penyedia/barang/baru"];
+const signedIn = ["/favorit", "/chat", "/notifikasi", "/profil", "/profil/pengaturan", "/sewaan", "/verifikasi", "/penyedia", "/penyedia/barang/baru"];
 const personas = [
   { id: null, tag: "tamu", routes: common },
   { id: "u-raka", tag: "raka", routes: [...common, ...signedIn, "/sewaan/b-accepted", "/sewaan/b-accepted/chat", "/sewaan/b-accepted/serah-terima", "/sewaan/b-overdue/pengembalian", "/sewaan/b-disputed/sengketa"] },
