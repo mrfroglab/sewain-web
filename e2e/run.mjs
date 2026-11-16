@@ -34,6 +34,9 @@ const suites = [
   { name: "Sengketa, admin, wizard, daftar, kadaluarsa", file: "dispute-admin-onboarding.mjs", args: [base, path.join(out, "dispute")], env: { SEPARATE: "1" } },
   { name: "Realtime antar perangkat", file: "realtime.mjs", args: [base] },
   { name: "Antrean aksi tahan reload/offline", file: "offline-queue.mjs", args: [base, api, path.join(out, "offline-queue")] },
+  // Real OTP (v2, OTP_PROVIDER=echo). Both skip with exit 0 on servers without it.
+  { name: "Daftar OTP → KYC → admin setujui → listing", file: "auth-otp.mjs", args: [base, api, path.join(out, "auth-otp")] },
+  { name: "Pengaturan akun: sesi, preferensi, ekspor, hapus", file: "account.mjs", args: [base, api, path.join(out, "account")] },
 ];
 
 let failed = 0;
