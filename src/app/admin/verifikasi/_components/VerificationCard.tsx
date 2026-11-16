@@ -9,9 +9,11 @@ import { Button } from "@/components/ui/Button";
 import { cn } from "@/components/ui/cn";
 import { areaName } from "@/lib/data/areas";
 import { formatDateTime, relativeTime } from "@/lib/format";
+import type { KycSubmission } from "@/lib/account";
 import { usePhoto } from "@/lib/photos";
 import { publicName } from "@/lib/selectors";
 import type { ID, User, VerificationMethod, VerificationRequest } from "@/lib/types";
+import { KycPhotos } from "./KycPhotos";
 import { MATCH_HINT, MATCH_LABEL, matchName } from "./nameMatch";
 
 export const METHOD_LABEL: Record<VerificationMethod, string> = {
@@ -57,8 +59,13 @@ export function VerificationCard({
   now,
   onApprove,
   onReject,
+  kyc,
+  busy,
 }: {
   req: VerificationRequest;
+  /** the server KYC submission behind this request (F6.2): photos via the audited files endpoint */
+  kyc?: KycSubmission;
+  busy?: boolean;
   user?: User;
   reviewer?: User;
   now: number;
@@ -66,7 +73,8 @@ export function VerificationCard({
   onReject: () => void;
 }) {
   const profileName = user?.name ?? "Akun tidak ditemukan";
-  const match = matchName(req.nameOnKtp, profileName);
+  const nameOnKtp = kyc?.nameOnKtp || req.nameOnKtp;
+  const match = matchName(nameOnKtp, profileName);
   const hint = MATCH_HINT[match];
 
   return (
@@ -93,7 +101,7 @@ export function VerificationCard({
       <div className="mt-4 grid gap-4 md:grid-cols-[minmax(0,1.2fr)_minmax(0,1fr)]">
         <dl className="divide-y divide-border-gray border-y border-border-gray">
           <Row k="Nama di KTP">
-            <span className="font-mono text-[13px] tracking-wide">{req.nameOnKtp}</span>
+            <span className="font-mono text-[13px] tracking-wide">{nameOnKtp || "–"}</span>
           </Row>
           <Row k="Nama di profil">
             <span className="flex flex-wrap items-center gap-x-2 gap-y-1">
@@ -104,11 +112,11 @@ export function VerificationCard({
             </span>
           </Row>
           <Row k="NIK">
-            <span className="font-mono text-[13px] tracking-wide">{req.nikMasked || "–"}</span>
+            <span className="font-mono text-[13px] tracking-wide">{kyc?.nikMasked || req.nikMasked || "–"}</span>
           </Row>
           <Row k="Cara verifikasi">
             <span className="flex flex-wrap items-center gap-x-2 gap-y-1">
-              {METHOD_LABEL[req.method]}
+              {kyc ? "Unggah KTP + selfie (tinjauan admin)" : METHOD_LABEL[req.method]}
               {req.auto && (
                 <Badge tone="soft" icon={<Sparkles className="size-3" />}>
                   {req.status === "ditolak" ? "sempat disetujui otomatis (simulasi eKYC)" : "disetujui otomatis (simulasi eKYC)"}
@@ -117,10 +125,14 @@ export function VerificationCard({
             </span>
           </Row>
         </dl>
-        <div className="grid grid-cols-2 gap-2.5">
-          <IdPhoto id={req.ktpPhotoId} label="Foto KTP" />
-          <IdPhoto id={req.selfiePhotoId} label="Selfie memegang KTP" />
-        </div>
+        {kyc ? (
+          <KycPhotos submission={kyc} />
+        ) : (
+          <div className="grid grid-cols-2 gap-2.5">
+            <IdPhoto id={req.ktpPhotoId} label="Foto KTP" />
+            <IdPhoto id={req.selfiePhotoId} label="Selfie memegang KTP" />
+          </div>
+        )}
       </div>
 
       {hint && req.status === "menunggu" && (
@@ -150,20 +162,20 @@ export function VerificationCard({
         <div className="flex w-full gap-2 sm:w-auto">
           {req.status === "menunggu" && (
             <>
-              <Button variant="secondary" className="flex-1 sm:flex-none" onClick={onReject}>
+              <Button variant="secondary" className="flex-1 sm:flex-none" onClick={onReject} disabled={busy}>
                 <X className="size-4" /> Tolak
               </Button>
-              <Button className="flex-1 sm:flex-none" onClick={onApprove} disabled={!user}>
+              <Button className="flex-1 sm:flex-none" onClick={onApprove} disabled={!user || busy} loading={busy}>
                 <Check className="size-4" /> Setujui
               </Button>
             </>
           )}
-          {req.status === "disetujui" && (
+          {req.status === "disetujui" && !kyc && (
             <Button variant="secondary" onClick={onReject} disabled={!user}>
               Cabut verifikasi
             </Button>
           )}
-          {req.status === "ditolak" && (
+          {req.status === "ditolak" && !kyc && (
             <Button variant="secondary" onClick={onApprove} disabled={!user}>
               Setujui ulang
             </Button>

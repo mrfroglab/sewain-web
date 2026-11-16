@@ -31,20 +31,28 @@ const REASONS: { icon: ReactNode; title: string; body: string }[] = [
   },
 ];
 
-export function IntroStep({ user, onStart, onSkip, notice }: { user: User; onStart: () => void; onSkip: () => void; notice?: ReactNode }) {
+/** Real KYC (F6.2): what actually happens to the photos (PRD §7.2, UU PDP). */
+export const REAL_PRIVACY =
+  "Foto KTP dan selfie dikirim lewat koneksi terenkripsi, disimpan terenkripsi, dan hanya dibuka admin peninjau (setiap akses tercatat). Fotonya dihapus otomatis setelah verifikasi diputuskan; yang disimpan hanya status dan NIK tersamar.";
+
+export function IntroStep({ user, onStart, onSkip, notice, real = false }: { user: User; onStart: () => void; onSkip?: () => void; notice?: ReactNode; real?: boolean }) {
+  const reasons = real ? REASONS.map((r) => (r.title === "Foto aman" ? { ...r, body: REAL_PRIVACY } : r)) : REASONS;
   return (
     <section aria-labelledby="verif-intro" className="animate-fade-up">
       <h1 id="verif-intro" className="text-[26px] font-semibold leading-tight tracking-[-0.6px] text-ink">
         Verifikasi identitas
       </h1>
       <p className="mt-2 text-body text-smoke">
-        Hai {publicName(user)}, cukup sekali dan ±1 menit: foto KTP, lalu selfie sambil memegang KTP. Setelah itu kamu bisa menyewa dan menyewakan.
+        Hai {publicName(user)},{" "}
+        {real
+          ? "cukup sekali: foto KTP, lalu selfie sambil memegang KTP. Admin meninjau paling lambat 1×24 jam, setelah itu kamu bisa menyewa dan menyewakan."
+          : "cukup sekali dan ±1 menit: foto KTP, lalu selfie sambil memegang KTP. Setelah itu kamu bisa menyewa dan menyewakan."}
       </p>
 
       {notice && <div className="mt-5">{notice}</div>}
 
       <ul className="mt-6 space-y-5">
-        {REASONS.map((r) => (
+        {reasons.map((r) => (
           <li key={r.title} className="flex gap-3.5">
             <span className="grid size-10 shrink-0 place-items-center rounded-full bg-soft-gray text-ink">{r.icon}</span>
             <span className="min-w-0">
@@ -63,7 +71,7 @@ export function IntroStep({ user, onStart, onSkip, notice }: { user: User; onSta
         <Button size="lg" block onClick={onStart}>
           Mulai verifikasi <ArrowRight className="size-4" />
         </Button>
-        <SkipDemoButton onSkip={onSkip} />
+        {onSkip && <SkipDemoButton onSkip={onSkip} />}
       </div>
     </section>
   );

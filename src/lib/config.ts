@@ -69,3 +69,13 @@ export async function loadConfig(): Promise<void> {
 }
 
 export const usePaymentMode = () => useAppConfig((s) => s.paymentMode);
+
+/**
+ * F6.1: the server runs real OTP (any provider other than `demo`, or no demo mode at all). Then /masuk uses
+ * POST /api/v1/auth/otp/request + verify; the demo persona picker stays as long as `demoMode` is on.
+ * v1 servers (no /api/v1/config) keep the simulated OTP.
+ */
+export const realOtpEnabled = (c: Pick<AppConfig, "fromServer" | "demoMode" | "otpProvider">) =>
+  c.fromServer && (!c.demoMode || (!!c.otpProvider && c.otpProvider !== "demo"));
+
+export const useRealOtp = () => useAppConfig(realOtpEnabled);

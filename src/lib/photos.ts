@@ -8,7 +8,7 @@ import { createStore, get as idbGet, set as idbSet } from "idb-keyval";
 import { useEffect, useState } from "react";
 import { isOnline, registerDemoPhoto, resolveMediaUrl, uploadPhoto } from "./api";
 import { sha256Blob } from "./sha256";
-import { useAppStore } from "./store";
+import { refreshSnapshot, useAppStore } from "./store";
 import type { ID, PhotoRecord, PhotoSource, PhotoStage } from "./types";
 
 let store: ReturnType<typeof createStore> | null = null;
@@ -57,6 +57,8 @@ export interface SavePhotoInput {
   angle?: string;
   /** default true; KTP/selfie in the eKYC simulation are compressed harder */
   maxSide?: number;
+  /** server upload progress 0..1 (F6.4) */
+  onProgress?: (fraction: number) => void;
 }
 
 /** KTP & selfie never leave the browser in the prototype (PRD §7.2: foto eKYC simulasi tidak disimpan di server). */
@@ -69,7 +71,7 @@ const LOCAL_ONLY_STAGES: PhotoStage[] = ["ktp", "selfie"];
 export async function savePhoto(input: SavePhotoInput): Promise<PhotoRecord> {
   const { blob, width, height } = await compressImage(input.blob, input.maxSide ?? 1600);
   if (isOnline() && !LOCAL_ONLY_STAGES.includes(input.stage)) {
-    const record = await uploadPhoto<PhotoRecord>(blob, { stage: input.stage, bookingId: input.bookingId, angle: input.angle, source: input.source, width, height });
+    const record = await uploadPhoto<PhotoRecord>(blob, { stage: input.stage, bookingId: input.bookingId, angle: input.angle, source: input.source, width, height }, input.onProgress);
     useAppStore.getState().addPhotos([record]);
     return record;
   }
@@ -95,7 +97,7 @@ export async function savePhoto(input: SavePhotoInput): Promise<PhotoRecord> {
 }
 
 /** "Pakai foto contoh (demo)": registers a bundled image as evidence, hashed from its real bytes. */
-export async function saveDemoPhoto(url: string, meta: Omit<SavePhotoInput, "blob" | "source">): Promise<PhotoRecord> {
+export async function saveDemoPhoto(url: string, meta: Omit<SavePhotoInput, "blob" | "source" | "onProgress">): Promise<PhotoRecord> {
   if (isOnline() && !LOCAL_ONLY_STAGES.includes(meta.stage) && url.startsWith("/img/")) {
     const record = await registerDemoPhoto<PhotoRecord>(url, { stage: meta.stage, bookingId: meta.bookingId, angle: meta.angle });
     useAppStore.getState().addPhotos([record]);
@@ -117,6 +119,22 @@ export async function saveDemoPhoto(url: string, meta: Omit<SavePhotoInput, "blo
   };
   useAppStore.getState().addPhotos([record]);
   return record;
+}
+
+/**
+ * Signed photo URLs from the snapshot (v2, docs/integration/media.md §3) expire after about an hour. When one fails
+ * to load, fetch a fresh snapshot (new `src`) once per photo, throttled across the page. Returns true when a refresh
+ * was started, so the caller can show a placeholder instead of a broken image.
+ */
+const retriedPhotos = new Set<string>();
+let refreshing: Promise<void> | null = null;
+export function onPhotoLoadError(photoId: ID, src: string | undefined): boolean {
+  if (!src || src.startsWith("idb:") || src.startsWith("/img/") || !isOnline()) return false;
+  const key = `${photoId}|${src}`;
+  if (retriedPhotos.has(key)) return false;
+  retriedPhotos.add(key);
+  refreshing ??= refreshSnapshot().finally(() => window.setTimeout(() => (refreshing = null), 3000));
+  return true;
 }
 
 /** Resolve a photo src ("/img/..." or "idb:<id>") to something an <img> can show. undefined while loading; null if missing. */

@@ -8,6 +8,7 @@ import { Notice } from "@/components/ui/Layout";
 import { areaName } from "@/lib/data/areas";
 import { maskPhone } from "@/lib/format";
 import { publicName } from "@/lib/selectors";
+import { useRealSession } from "@/lib/session";
 import type { User } from "@/lib/types";
 
 const monthYear = new Intl.DateTimeFormat("id-ID", { month: "long", year: "numeric" });
@@ -22,6 +23,9 @@ const VERIF_BADGE = {
 /** Header card: who you are (full name is only visible to yourself), verification, membership. */
 export function ProfileHeader({ user }: { user: User }) {
   const status = user.verification.status;
+  // Real accounts (F6.2): KTP + selfie went to the server and wait for an admin; nothing to speed up.
+  const real = useRealSession();
+  const pendingReal = real && status === "menunggu";
   const verified = status === "terverifikasi";
   const vb = VERIF_BADGE[status];
 
@@ -62,11 +66,15 @@ export function ProfileHeader({ user }: { user: User }) {
             {status === "menunggu" ? <Clock className="size-5" /> : <IdCard className="size-5" />}
           </span>
           <div className="min-w-0 flex-1">
-            <p className="text-body-sm font-semibold text-ink">{status === "menunggu" ? "Verifikasimu sedang ditinjau admin" : status === "ditolak" ? "Verifikasi ditolak, ulangi yuk" : "Verifikasi KTP + selfie dulu"}</p>
-            <p className="mt-0.5 text-caption text-smoke">Tanpa verifikasi kamu bisa menjelajah, tapi belum bisa menyewa atau menyewakan. Cuma ±1 menit.</p>
+            <p className="text-body-sm font-semibold text-ink">{pendingReal ? "Menunggu review admin" : status === "menunggu" ? "Verifikasimu sedang ditinjau admin" : status === "ditolak" ? "Verifikasi ditolak, ulangi yuk" : "Verifikasi KTP + selfie dulu"}</p>
+            <p className="mt-0.5 text-caption text-smoke">
+              {pendingReal
+                ? "KTP dan selfie-mu sudah kami terima dan disimpan terenkripsi. Admin meninjau paling lambat 1×24 jam; fotonya dihapus setelah diputuskan."
+                : "Tanpa verifikasi kamu bisa menjelajah, tapi belum bisa menyewa atau menyewakan. Cuma ±1 menit."}
+            </p>
           </div>
           <ButtonLink href={`/verifikasi?next=${encodeURIComponent("/profil")}`} className="shrink-0">
-            {status === "menunggu" ? "Percepat" : "Verifikasi sekarang"} <ArrowRight className="size-4" />
+            {pendingReal ? "Lihat status" : status === "menunggu" ? "Percepat" : "Verifikasi sekarang"} <ArrowRight className="size-4" />
           </ButtonLink>
         </div>
       )}

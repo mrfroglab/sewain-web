@@ -29,6 +29,8 @@ export function KtpStep({
   onCapture,
   onNext,
   onSkip,
+  manual = false,
+  demoSamples = true,
 }: {
   profileName: string;
   initial: KtpData | null;
@@ -36,7 +38,12 @@ export function KtpStep({
   nikError: string | null;
   onCapture: (c: Capture) => void;
   onNext: (data: KtpData) => void;
-  onSkip: () => void;
+  /** undefined = no "Lewati (demo)" (real KYC outside demo mode) */
+  onSkip?: () => void;
+  /** real KYC (F6.2): no simulated OCR; the user types name + NIK as printed on the card */
+  manual?: boolean;
+  /** offer "Pakai foto contoh" in the camera (demo/staging only) */
+  demoSamples?: boolean;
 }) {
   const [capture, setCapture] = useState<Capture | null>(initial?.capture ?? null);
   const [phase, setPhase] = useState<"empty" | "reading" | "result">(initial ? "result" : "empty");
@@ -60,6 +67,12 @@ export function KtpStep({
     setConfirmed(false);
     setError(null);
     window.clearTimeout(timer.current);
+    if (manual) {
+      setName((n) => n || profileName.toUpperCase());
+      setEditing(true);
+      setPhase("result");
+      return;
+    }
     // Simulated OCR: reads the profile name and a NIK from "the card".
     timer.current = window.setTimeout(() => {
       setName(profileName.toUpperCase());
@@ -122,7 +135,7 @@ export function KtpStep({
         <div className="animate-fade-up mt-5 rounded-card border border-border-gray p-4">
           <div className="flex items-center justify-between gap-3">
             <p className="flex items-center gap-2 text-body-sm font-semibold text-ink">
-              <ScanText className="size-4" /> Hasil baca KTP
+              <ScanText className="size-4" /> {manual ? "Data di KTP" : "Hasil baca KTP"}
             </p>
             {!editing && (
               <button type="button" onClick={() => setEditing(true)} className="-mr-2 inline-flex h-9 items-center gap-1.5 rounded-control px-3 text-body-sm font-semibold text-ink hover:bg-soft-gray">
@@ -152,7 +165,7 @@ export function KtpStep({
                 help="16 digit di baris paling atas KTP."
               />
               <div className="flex flex-wrap items-center justify-between gap-2">
-                <button
+                {!manual && <button
                   type="button"
                   onClick={() => {
                     setNik(TAKEN_NIK_SAMPLE);
@@ -161,7 +174,8 @@ export function KtpStep({
                   className="inline-flex h-9 items-center rounded-control px-1 text-caption text-smoke underline underline-offset-2 hover:text-ink"
                 >
                   Uji demo: pakai NIK yang sudah terdaftar
-                </button>
+                </button>}
+                {manual && <span />}
                 <Button variant="secondary" onClick={() => setEditing(false)} disabled={!nameValid || !nikValid || !!error}>
                   Simpan
                 </Button>
@@ -174,7 +188,11 @@ export function KtpStep({
               {error && <p className="mt-1 text-caption text-sale-text">{error}</p>}
             </div>
           )}
-          <p className="mt-2 text-caption text-smoke">Ada huruf yang salah baca? Ketuk Ubah. NIK disimpan tersamar dan tidak ditampilkan ke siapa pun.</p>
+          <p className="mt-2 text-caption text-smoke">
+            {manual
+              ? "Tulis persis seperti di KTP. NIK dikirim terenkripsi, setelah itu hanya tampil tersamar."
+              : "Ada huruf yang salah baca? Ketuk Ubah. NIK disimpan tersamar dan tidak ditampilkan ke siapa pun."}
+          </p>
         </div>
       )}
 
@@ -184,7 +202,7 @@ export function KtpStep({
             <TriangleAlert className="size-4 shrink-0" /> Nama di KTP beda dengan nama profil
           </p>
           <p className="mt-1 text-body-sm text-graphite">
-            Profil: <b className="text-ink">{profileName}</b>. Di aplikasi asli, beda nama akan ditinjau manual oleh tim Sewain (maks. 1×24 jam) sebelum akunmu bisa bertransaksi.
+            Profil: <b className="text-ink">{profileName}</b>. {manual ? "Admin akan mencocokkan nama ini saat meninjau." : "Di aplikasi asli, beda nama akan ditinjau manual oleh tim Sewain (maks. 1×24 jam) sebelum akunmu bisa bertransaksi."}
           </p>
           <label className="mt-3 flex cursor-pointer items-start gap-2.5 text-body-sm text-ink">
             <input type="checkbox" checked={confirmed} onChange={(e) => setConfirmed(e.target.checked)} className="mt-0.5 size-4 shrink-0 accent-ink" />
@@ -208,7 +226,7 @@ export function KtpStep({
             <Camera className="size-4" /> Buka kamera
           </Button>
         )}
-        <SkipDemoButton onSkip={onSkip} disabled={phase === "reading"} />
+        {onSkip && <SkipDemoButton onSkip={onSkip} disabled={phase === "reading"} />}
       </div>
 
       <CameraCapture
@@ -220,7 +238,7 @@ export function KtpStep({
         frame="ktp"
         facing="environment"
         multiple={false}
-        demoSources={[DEMO_KTP]}
+        demoSources={demoSamples ? [DEMO_KTP] : []}
       />
     </section>
   );
