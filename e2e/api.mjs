@@ -48,7 +48,10 @@ check("photo served with X-Content-SHA256", served.status === 200 && served.head
 const s1 = (await j(`/api/v1/listings/search?lat=-7.7713&lng=110.3776&radiusKm=3`)).body;
 const s2 = (await j(`/api/v1/listings/search?lat=-7.7596&lng=110.3727&radiusKm=3`)).body;
 check(`PostGIS search from UGM 3km: ${s1.hits?.length} hits, hidden ${s1.hiddenByProviderReach}`, s1.ok && s1.hits.length > 30);
-check(`two-way rule from Pogung hides Bu Tini (radius 1,5km): hidden ${s2.hiddenByProviderReach}`, s2.ok && s2.hiddenByProviderReach >= 5 && !s2.hits.some((h) => h.id === "l-panci-besar"));
+// Every hit must also be within its provider's own reach; listings beyond it are counted as hidden.
+const reach = new Map((await j("/api/v1/state")).body.listings.map((l) => [l.id, l.radiusKm]));
+const beyondReach = s2.hits?.filter((h) => h.distanceKm > (reach.get(h.id) ?? Infinity) + 1e-6) ?? [];
+check(`two-way rule from Pogung: hidden ${s2.hiddenByProviderReach}, all hits within provider reach`, s2.ok && s2.hiddenByProviderReach >= 1 && beyondReach.length === 0, JSON.stringify(beyondReach));
 const s3 = (await j(`/api/v1/listings/search?lat=-7.7713&lng=110.3776&radiusKm=5&kategori=kamera&jaminan=cukup-identitas`)).body;
 check(`filters (kategori kamera + cukup identitas): ${s3.hits?.length} hits`, s3.ok && s3.hits.length >= 1);
 
