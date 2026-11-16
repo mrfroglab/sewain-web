@@ -13,7 +13,7 @@ import { CATEGORY_BY_ID } from "./data/categories";
 import { DATA_VERSION, createSeed } from "./data/seed";
 import { endOfDay, firstName, isoDate, rupiah } from "./format";
 import { collateralValue, computeCommission, depositCash, describeCollateral, quoteRent } from "./pricing";
-import { connectEvents, detectApi, fetchState, isOnline, useApiStatus } from "./api";
+import { connectEvents, detectApi, fetchState, isOnline, reconnectEvents, useApiStatus } from "./api";
 import { loadConfig, useAppConfig } from "./config";
 import { blockingCount, enqueueAction, flushOutbox, pendingEntries, startOutbox } from "./outbox";
 import { SIMULATE_SCOPED, scopeSnapshot } from "./scope";
@@ -560,10 +560,17 @@ export const useAppStore = create<AppState>()(
           if (!["ACCEPTED", "ACTIVE"].includes(b.status)) return fail("Pembayaran tersedia setelah request disetujui.");
           if (b.payment.status === "lunas") return fail("Sudah lunas.");
           patchBooking(bookingId, { payment: { ...b.payment, status: "lunas", method, paidAt: now() } });
-          push({
-            notifications: [notify(b.providerId, "booking", "Pembayaran diterima (simulasi)", `${titleOf(b)}: ${rupiah(b.payment.total)} lunas via Sewain.`, href(b))],
-            messages: [sysMsg(bookingId, `Pembayaran ${rupiah(b.payment.total)} ditandai lunas (simulasi ${method.toUpperCase()}).`)],
-          });
+          // "langsung" (payment mode offline): money changed hands outside Sewain; say only what the renter claims.
+          if (method === "langsung")
+            push({
+              notifications: [notify(b.providerId, "booking", "Penyewa menandai sudah bayar", `${titleOf(b)}: penyewa menandai sudah bayar ${rupiah(b.payment.total)} langsung ke kamu.`, href(b))],
+              messages: [sysMsg(bookingId, "Penyewa menandai sudah bayar langsung ke penyedia.")],
+            });
+          else
+            push({
+              notifications: [notify(b.providerId, "booking", "Pembayaran diterima (simulasi)", `${titleOf(b)}: ${rupiah(b.payment.total)} lunas via Sewain.`, href(b))],
+              messages: [sysMsg(bookingId, `Pembayaran ${rupiah(b.payment.total)} ditandai lunas (simulasi ${method.toUpperCase()}).`)],
+            });
           return ok(undefined);
         },
         submitCheckout: (actorId, bookingId, input) => {
@@ -1008,7 +1015,9 @@ async function syncFromServer(force = false): Promise<void> {
 
 /** Re-read the snapshot for whoever is signed in now (a scoped snapshot depends on the viewer). */
 export function resyncForViewer() {
-  if (isOnline()) void syncFromServer(true);
+  if (!isOnline()) return;
+  void syncFromServer(true);
+  reconnectEvents();
 }
 
 let depth = 0;
@@ -1099,6 +1108,11 @@ async function connectServer(): Promise<boolean> {
       () => {
         void flushOutbox();
         void syncFromServer();
+      },
+      // Demo bearer sessions: identify the socket (v2 sends events per user). Real sessions use the cookie.
+      async () => {
+        const id = session.currentUserId();
+        return id && useAppConfig.getState().demoMode ? session.tokenFor(id) : null;
       },
     );
     document.addEventListener("visibilitychange", () => document.visibilityState === "visible" && void syncFromServer());

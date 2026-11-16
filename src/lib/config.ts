@@ -5,6 +5,7 @@
 
 import { create } from "zustand";
 import { fetchConfig, type ServerConfig } from "./api";
+import { LEGAL_DRAFT } from "./legal";
 
 /**
  * simulated = "Bayar via Sewain (simulasi)" (demo).
@@ -25,8 +26,6 @@ export interface AppConfig {
   privacyVersion: string;
 }
 
-/** Versions of the draft legal pages shipped with this build (src/app/syarat, src/app/privasi). */
-export const LEGAL_DRAFT = { termsVersion: "0.1-draf", privacyVersion: "0.1-draf", date: "16 November 2026" } as const;
 
 const DEFAULTS: AppConfig = {
   fromServer: false,

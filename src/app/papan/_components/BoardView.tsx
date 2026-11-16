@@ -72,11 +72,14 @@ function Board() {
       />
 
       <div className="flex items-center justify-between gap-3">
-        <button type="button" onClick={() => setLocOpen(true)} className={chipClass(false, "min-w-0")} aria-label={`Ubah lokasi dan radius: ${locLabel}`}>
-          <MapPin className="size-3.5 shrink-0" />
-          <span className="truncate">{locLabel}</span>
-          <ChevronDown className="size-3.5 shrink-0 text-smoke" />
-        </button>
+        {/* min-w-0 wrapper: on 360 px the location chip truncates instead of pushing the button off-screen */}
+        <div className="min-w-0 flex-1">
+          <button type="button" onClick={() => setLocOpen(true)} className={chipClass(false, "max-w-full")} aria-label={`Ubah lokasi dan radius: ${locLabel}`}>
+            <MapPin className="size-3.5 shrink-0" />
+            <span className="truncate">{locLabel}</span>
+            <ChevronDown className="size-3.5 shrink-0 text-smoke" />
+          </button>
+        </div>
         <Button onClick={() => setCreateOpen(true)} className="shrink-0">
           <Plus className="size-4" /> Buat permintaan
         </Button>

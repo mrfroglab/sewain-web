@@ -278,15 +278,18 @@ export const STATUS_FLOW: BookingStatus[] = ["REQUESTED", "ACCEPTED", "ACTIVE", 
 
 export const isOpenBooking = (b: Booking) => ["REQUESTED", "ACCEPTED", "ACTIVE", "RETURNED", "DISPUTED"].includes(b.status);
 
-/** What the given user must do next on this booking (for "perlu tindakan" badges). null = nothing. */
-export function nextAction(b: Booking, userId: ID, reviews: Review[]): string | null {
+/**
+ * What the given user must do next on this booking (for "perlu tindakan" badges). null = nothing.
+ * Paying is only a to-do in the simulated payment mode; in "offline"/"gateway" it never blocks the handover.
+ */
+export function nextAction(b: Booking, userId: ID, reviews: Review[], paymentMode: "simulated" | "offline" | "gateway" = "simulated"): string | null {
   const role = bookingRole(b, userId);
   if (!role) return null;
   switch (b.status) {
     case "REQUESTED":
       return role === "penyedia" ? "Setujui atau tolak request" : null;
     case "ACCEPTED":
-      if (!b.checkout) return role === "penyedia" ? "Foto serah terima (barang + jaminan)" : b.payment.status === "belum" ? "Bayar via Sewain (simulasi)" : null;
+      if (!b.checkout) return role === "penyedia" ? "Foto serah terima (barang + jaminan)" : b.payment.status === "belum" && paymentMode === "simulated" ? "Bayar via Sewain (simulasi)" : null;
       if (role === "penyewa" && !b.checkout.renterAgreedAt) return "Cek & setujui kondisi barang";
       if (role === "penyedia" && !b.checkout.providerAgreedAt) return "Setujui kondisi barang";
       return null;

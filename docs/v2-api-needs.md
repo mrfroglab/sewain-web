@@ -176,3 +176,22 @@ tidak dikirim, jadi lebih rapi kalau server mengirim `visibleAt` dan web memakai
 
 Alur "masuk pakai nomor HP" sekarang mencari `users[].phone` di klien. Di mode scoped nomor HP orang lain tidak
 ada, jadi alur ini harus pindah ke OTP server (F6.1, fase B). Pemilih persona demo tidak terpengaruh.
+
+## Keputusan koordinator (16 Nov 2026)
+
+Semua usulan disetujui; rinciannya mengikat worker `integrate-v2` (salinan lengkap:
+`sewain/sewain-web-v2-api-needs.md`). Yang mengubah usulan di atas:
+
+- `listingBusy` **di snapshot**, hanya untuk listing yang ada di snapshot, status `ACCEPTED/ACTIVE/DISPUTED` dengan
+  `end >= hari ini` (WIB), rentang digabung.
+- `publicStats = {completedRentals, disputes, trustScore, strikes}`: jumlah strike **publik**, jadi badge
+  "Pernah bersengketa" tetap tampil di profil orang lain.
+- `status` dikirim di profil publik, **dan** listing milik user `suspend`/`blacklist` tidak dikirim.
+- `chatReads` kedua pihak di booking viewer: ya. `wanted` terbuka publik, `offers` hanya peminta/penawar/admin.
+- `Idempotency-Key`: header + body `idempotencyKey` (header menang); kunci sama dengan aksi/args beda → `409`.
+- Pelanggaran aturan tetap `200 {ok:false,error}` seperti v1.
+- `payBooking(..., "langsung")` saat `PAYMENT_MODE=offline` + aksi baru `confirmDirectPayment(providerId, bookingId)` (P2).
+- `Review.visibleAt`: ya. `GET /api/v1/config` tanpa auth, `Cache-Control: max-age=60`.
+- WebSocket demo per tab boleh membawa token lewat `?token=` (web mengirimnya hanya saat `demoMode`).
+
+Mode `NEXT_PUBLIC_SIMULATE_SCOPED=1` di web mengikuti bentuk final ini.

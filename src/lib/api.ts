@@ -184,35 +184,56 @@ export async function serverSearch(params: Record<string, string | number | unde
 
 /* --------------------------------------------------------------------- events */
 
-/** WebSocket change feed with automatic reconnect. Calls onChange(version) for every server change. */
-export function connectEvents(onChange: (version: number) => void, onOpen: () => void): () => void {
+let reopenEvents: (() => void) | null = null;
+
+/** Reconnect the change feed (e.g. after a persona switch: v2 sends events only to the signed-in user). */
+export function reconnectEvents() {
+  reopenEvents?.();
+}
+
+/**
+ * WebSocket change feed with automatic reconnect. Calls onChange(version) for every server change.
+ * `token` (demo bearer sessions only) is passed as ?token=, since a browser WebSocket cannot send headers.
+ */
+export function connectEvents(onChange: (version: number) => void, onOpen: () => void, token: () => Promise<string | null> = async () => null): () => void {
   let ws: WebSocket | null = null;
   let stopped = false;
   let retry = 1000;
-  const open = () => {
+  const open = async () => {
     if (stopped) return;
     const base = API_BASE || window.location.origin;
-    ws = new WebSocket(`${base.replace(/^http/, "ws")}/api/v1/events`);
-    ws.onopen = () => {
+    const t = await token().catch(() => null);
+    if (stopped) return;
+    const socket = new WebSocket(`${base.replace(/^http/, "ws")}/api/v1/events${t ? `?token=${encodeURIComponent(t)}` : ""}`);
+    ws = socket;
+    socket.onopen = () => {
       retry = 1000;
       useApiStatus.setState({ status: "online" });
       onOpen();
     };
-    ws.onmessage = (m) => {
+    socket.onmessage = (m) => {
       try {
         const msg = JSON.parse(String(m.data)) as { type: string; version: number };
         if (msg.type === "changed" || msg.type === "hello") onChange(msg.version);
       } catch {}
     };
-    ws.onclose = () => {
-      if (stopped) return;
-      window.setTimeout(open, retry);
+    socket.onclose = () => {
+      if (stopped || ws !== socket) return;
+      window.setTimeout(() => void open(), retry);
       retry = Math.min(retry * 2, 15_000);
     };
   };
-  open();
+  reopenEvents = () => {
+    const old = ws;
+    ws = null;
+    old?.close();
+    retry = 1000;
+    void open();
+  };
+  void open();
   return () => {
     stopped = true;
+    reopenEvents = null;
     ws?.close();
   };
 }

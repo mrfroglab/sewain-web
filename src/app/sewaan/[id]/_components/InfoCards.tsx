@@ -6,7 +6,9 @@ import { cn } from "@/components/ui/cn";
 import { KV } from "@/components/ui/Layout";
 import { formatDateTime, rupiah } from "@/lib/format";
 import { describeCollateral } from "@/lib/pricing";
-import { PAYMENT_METHOD_LABEL, type BookingView } from "./shared";
+import { usePaymentMode } from "@/lib/config";
+import { paidLine, unpaidNote } from "./PaymentMode";
+import type { BookingView } from "./shared";
 
 function InfoCard({ icon, title, badge, className, children }: { icon: ReactNode; title: string; badge?: ReactNode; className?: string; children: ReactNode }) {
   return (
@@ -29,8 +31,9 @@ export function PaymentCard({ view, className }: { view: BookingView; className?
   const p = b.payment;
   const c = b.agreement.commission;
   const paid = p.status === "lunas";
+  const mode = usePaymentMode();
   return (
-    <InfoCard icon={<Wallet className="size-4" />} title="Pembayaran" badge={<span className={chip(paid)}>{paid ? "Lunas" : "Belum dibayar"}</span>} className={className}>
+    <InfoCard icon={<Wallet className="size-4" />} title="Pembayaran" badge={<span className={chip(paid)}>{paid ? (p.method === "langsung" ? "Sudah bayar" : "Lunas") : "Belum dibayar"}</span>} className={className}>
       <KV k="Sewa" v={rupiah(p.rent)} />
       <KV k="Deposit uang" v={rupiah(p.deposit)} />
       <KV k="Komisi (penyewa)" v={rupiah(p.commission)} />
@@ -38,14 +41,7 @@ export function PaymentCard({ view, className }: { view: BookingView; className?
       <div className="mt-1 border-t border-border-gray pt-1">
         <KV k="Total penyewa" v={rupiah(p.total)} strong />
       </div>
-      {paid ? (
-        <p className="mt-2 text-caption text-smoke">
-          Via {p.method ? PAYMENT_METHOD_LABEL[p.method] : "Sewain"}
-          {p.paidAt ? ` · ${formatDateTime(p.paidAt)}` : ""} · simulasi
-        </p>
-      ) : (
-        <p className="mt-2 text-caption text-smoke">Selama pilot, pembayaran terjadi di luar platform (tunai/transfer langsung). Bayar via Sewain tersedia sebagai simulasi setelah request disetujui.</p>
-      )}
+      <p className="mt-2 text-caption text-smoke">{paid ? paidLine(p, mode) : unpaidNote(mode)}</p>
     </InfoCard>
   );
 }

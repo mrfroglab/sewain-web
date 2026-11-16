@@ -1,11 +1,10 @@
 // Test mode for the v2 scoped snapshot (ROADMAP §4), without a v2 backend: NEXT_PUBLIC_SIMULATE_SCOPED=1 (dev only)
 // filters the full v1 snapshot in the browser down to what the given viewer would receive from v2. It follows the
-// visibility table plus the P0 items of docs/v2-api-needs.md (referenced public profiles, listings of the viewer's
-// bookings, busy date ranges). P1 extras (publicStats, the other party's chatReads) are deliberately left out so
-// the UI is tested without them.
+// visibility table plus the contract agreed in docs/v2-api-needs.md ("Keputusan koordinator"): referenced public
+// profiles with publicStats, listings of the viewer's bookings, busy date ranges, both parties' chatReads.
 
 import { firstName } from "./format";
-import { isReviewVisible } from "./selectors";
+import { isReviewVisible, userStats } from "./selectors";
 import type { BusyRange, DataState, ID, Listing, User } from "./types";
 
 export const SIMULATE_SCOPED = process.env.NODE_ENV !== "production" && process.env.NEXT_PUBLIC_SIMULATE_SCOPED === "1";
@@ -13,7 +12,8 @@ export const SIMULATE_SCOPED = process.env.NODE_ENV !== "production" && process.
 /** ± 250 m grid (FR-S6): 0.0025° latitude ≈ 278 m. */
 const roundCoord = (x: number) => Math.round(x / 0.0025) * 0.0025;
 
-function publicProfile(u: User, demoMode: boolean): User {
+function publicProfile(u: User, demoMode: boolean, full: DataState, now: number): User {
+  const stats = userStats({ ...full, scope: "full" }, u.id, now);
   return {
     id: u.id,
     name: firstName(u.name),
@@ -32,7 +32,15 @@ function publicProfile(u: User, demoMode: boolean): User {
     baseRating: u.baseRating,
     baseRatingCount: u.baseRatingCount,
     demo: demoMode ? u.demo : undefined,
+    publicStats: { completedRentals: stats.completedRentals ?? 0, disputes: countDisputes(full, u.id), trustScore: stats.trustScore ?? 0, strikes: u.strikes ?? 0 },
   };
+}
+
+function countDisputes(full: DataState, userId: ID): number {
+  return full.disputes.filter((d) => {
+    const b = full.bookings.find((x) => x.id === d.bookingId);
+    return b && (b.renterId === userId || b.providerId === userId);
+  }).length;
 }
 
 const roundListing = (l: Listing): Listing => ({ ...l, location: { ...l.location, lat: roundCoord(l.location.lat), lng: roundCoord(l.location.lng) } });
@@ -47,6 +55,7 @@ export function scopeSnapshot<T extends DataState & { serverNow?: number }>(full
 
   const bookings = me ? full.bookings.filter((b) => b.renterId === me || b.providerId === me) : [];
   const bookingIds = new Set(bookings.map((b) => b.id));
+  // Listings of suspended/blacklisted owners are not sent at all (decision 3).
   const activeOwner = (id: ID) => full.users.find((u) => u.id === id)?.status === "aktif";
 
   // Listings: public live ones (rounded), all of my own (precise), and the ones my bookings point at (rounded).
@@ -83,7 +92,7 @@ export function scopeSnapshot<T extends DataState & { serverNow?: number }>(full
   }
   const users = full.users.flatMap((u) => {
     if (u.id === me) return [u];
-    if (referenced.has(u.id) || (demoMode && u.demo)) return [publicProfile(u, demoMode)];
+    if (referenced.has(u.id) || (demoMode && u.demo)) return [publicProfile(u, demoMode, full, now)];
     return [];
   });
 
@@ -94,8 +103,9 @@ export function scopeSnapshot<T extends DataState & { serverNow?: number }>(full
     (listingBusy[b.listingId] ??= []).push({ start: b.startDate, end: b.endDate, count: 1 });
   }
 
+  // Both parties' read markers of my bookings (decision 7: "Dibaca" in chat).
   const chatReads: Record<string, number> = {};
-  for (const [k, v] of Object.entries(full.chatReads)) if (me && k.startsWith(`${me}:`)) chatReads[k] = v;
+  for (const [k, v] of Object.entries(full.chatReads)) if (bookingIds.has(k.slice(k.indexOf(":") + 1))) chatReads[k] = v;
 
   return {
     ...full,

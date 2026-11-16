@@ -11,6 +11,7 @@ import { Container, EmptyState, PageHeader, PageSkeleton } from "@/components/ui
 import { cn } from "@/components/ui/cn";
 import { StatusBadge } from "@/components/ui/StatusBadge";
 import { Tabs } from "@/components/ui/Tabs";
+import { usePaymentMode } from "@/lib/config";
 import { formatDateRange, rupiah } from "@/lib/format";
 import { nextAction, publicName, unreadMessages } from "@/lib/selectors";
 import { useAppStore } from "@/lib/store";
@@ -78,6 +79,7 @@ function BookingList({ user }: { user: User }) {
   const reviews = useAppStore((s) => s.reviews);
   const messages = useAppStore((s) => s.messages);
   const chatReads = useAppStore((s) => s.chatReads);
+  const paymentMode = usePaymentMode();
   const [filter, setFilter] = useState<Filter>("semua");
 
   const rows = useMemo(() => {
@@ -90,14 +92,14 @@ function BookingList({ user }: { user: User }) {
           side,
           listing: listings.find((l) => l.id === b.listingId),
           other: users.find((u) => u.id === (side === "penyewa" ? b.providerId : b.renterId)),
-          action: nextAction(b, user.id, reviews),
+          action: nextAction(b, user.id, reviews, paymentMode),
           unread: unreadMessages({ messages, chatReads, bookings }, user.id, b.id),
           last: lastActivity(b),
         };
       });
     // Needs-action first, then most recent activity.
     return list.sort((a, b) => Number(!!b.action) - Number(!!a.action) || b.last - a.last);
-  }, [bookings, listings, users, reviews, messages, chatReads, user.id]);
+  }, [bookings, listings, users, reviews, messages, chatReads, user.id, paymentMode]);
 
   const bySide = (s: Side) => rows.filter((r) => r.side === s);
   const actionCount = (s: Side) => bySide(s).filter((r) => r.action).length;

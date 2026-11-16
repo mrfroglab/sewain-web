@@ -1,17 +1,18 @@
 "use client";
 
-import { CalendarDays, Camera, CircleCheck, Handshake, MapPin, MessageCircle, Wallet } from "lucide-react";
+import { CalendarDays, Camera, CircleCheck, Handshake, MapPin, MessageCircle } from "lucide-react";
 import { useState } from "react";
-import { Button, ButtonLink } from "@/components/ui/Button";
+import { ButtonLink } from "@/components/ui/Button";
 import { Notice } from "@/components/ui/Layout";
 import { HANDOVER_LABEL } from "@/lib/data/categories";
-import { formatDate, formatDateTime, rupiah } from "@/lib/format";
+import { formatDate } from "@/lib/format";
 import { publicName } from "@/lib/selectors";
 import { useAppStore } from "@/lib/store";
 import { ActionButtons, ActionHead, CtaLink, InfoLine } from "./ActionBits";
+import { ProviderPaymentNote, RenterPaymentBlock } from "./PaymentMode";
 import { PaymentSheet } from "./PaymentSheet";
 import { ReasonSheet } from "./Sheets";
-import { PAYMENT_METHOD_LABEL, otherParty, type BookingView } from "./shared";
+import { otherParty, type BookingView } from "./shared";
 
 const CANCEL_REASONS = ["Rencana berubah", "Tidak bisa ketemu di jadwal itu", "Barang ternyata dipakai", "Penyewa/penyedia tidak bisa dihubungi"];
 
@@ -81,12 +82,8 @@ export function AcceptedActions({ view }: { view: BookingView }) {
         </ActionButtons>
       )}
 
-      {isRenter && <RenterPayment view={view} onPay={() => setSheet("pay")} />}
-      {role === "penyedia" && b.payment.status === "belum" && (
-        <p className="mt-4 text-caption text-smoke">
-          Penyewa belum membayar lewat Sewain. Selama pilot, pembayaran boleh tunai/transfer langsung saat ketemu. Serahkan barang setelah pembayaran beres.
-        </p>
-      )}
+      {isRenter && <RenterPaymentBlock view={view} onPay={() => setSheet("pay")} />}
+      {role === "penyedia" && <ProviderPaymentNote view={view} />}
 
       {!co && role !== "admin" && (
         <div className="mt-4 border-t border-border-gray pt-3">
@@ -113,33 +110,5 @@ export function AcceptedActions({ view }: { view: BookingView }) {
         onConfirm={(reason) => cancelBooking(user.id, b.id, reason)}
       />
     </>
-  );
-}
-
-function RenterPayment({ view, onPay }: { view: BookingView; onPay: () => void }) {
-  const p = view.b.payment;
-  if (p.status === "lunas")
-    return (
-      <div className="mt-4 flex items-center gap-3 rounded-[12px] bg-soft-gray p-3.5 text-body-sm">
-        <Wallet className="size-4 shrink-0 text-ink" />
-        <p className="text-graphite">
-          <span className="font-semibold text-ink">Lunas {rupiah(p.total)}</span> via {p.method ? PAYMENT_METHOD_LABEL[p.method] : "Sewain"}
-          {p.paidAt ? ` · ${formatDateTime(p.paidAt)}` : ""} (simulasi)
-        </p>
-      </div>
-    );
-  return (
-    <div className="mt-4 rounded-[12px] bg-soft-gray p-3.5">
-      <div className="flex items-start justify-between gap-3">
-        <div className="min-w-0">
-          <p className="text-body-sm font-semibold text-ink">Pembayaran</p>
-          <p className="mt-0.5 text-caption text-smoke">Sewa + deposit uang + komisi. Selama pilot, pembayaran terjadi di luar platform; tombol ini mensimulasikan Fase 2.</p>
-        </div>
-        <p className="shrink-0 text-body font-semibold text-ink">{rupiah(p.total)}</p>
-      </div>
-      <Button block className="mt-3" onClick={onPay}>
-        <Wallet className="size-4" /> Bayar via Sewain (simulasi)
-      </Button>
-    </div>
   );
 }
