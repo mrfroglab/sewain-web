@@ -7,12 +7,13 @@ Skenario yang dipakai sebagai gerbang sebelum versi baru menggantikan demo (ROAD
 |---|---|
 | `api.mjs` | Kontrak API: login demo, otorisasi aktor, siklus booking, unggah foto (hash server), PostGIS dua arah, aksi admin, jam demo, WebSocket |
 | `rental-cycle.mjs` | Siklus sewa penuh Raka ↔ Mas Bayu: request, setujui, bayar, check-out kamera, setuju kondisi, check-in, jaminan, rating |
-| `dispute-admin-onboarding.mjs` | Sengketa L1, mediasi admin L2, wizard listing Bu Tini, daftar + OTP + eKYC simulasi, kadaluarsa via jam demo |
+| `dispute-admin-onboarding.mjs` | Sengketa L1, mediasi admin L2, wizard listing Bu Tini, daftar + OTP + eKYC simulasi, profil akun baru (tidak dirujuk snapshot) dibuka user lain lewat `/u/<id>` (`GET /api/v1/users/{id}`; dilewati kalau endpoint 404 untuk semua id), kadaluarsa via jam demo |
 | `realtime.mjs` | Pesan chat muncul di perangkat lain tanpa reload |
 | `offline-queue.mjs` | Antrean aksi (F6.9): aksi lalu reload instan, request terputus lalu reload, dan offline → online. Server menerima tepat sekali |
 | `routes-smoke.mjs` | Semua rute × tamu/penyewa/penyedia/admin di 360 px: tanpa error JS, tanpa scroll horizontal, tanpa "tidak ditemukan". Tidak mengubah data, dijalankan terpisah: `node routes-smoke.mjs <web-base>` |
 | `auth-otp.mjs` | F6.1/F6.2: daftar lewat OTP `echo` (label "Kode uji staging") → centang S&K → nama → unggah KTP + selfie dengan NIK → "menunggu review" di profil → admin membuka foto (akses diaudit) dan menyetujui → akun baru menerbitkan listing → keluar memanggil `/auth/logout`. Dilewati (exit 0) kalau `config.auth.otpProvider !== "echo"` |
 | `account.mjs` | F6.6: dua perangkat satu akun → daftar sesi → "keluar dari semua perangkat lain" (perangkat yang dicabut dikembalikan ke `/masuk?next=`) → preferensi notifikasi tersimpan → ekspor JSON → tombol push di `/notifikasi` → akun demo tidak bisa dihapus → hapus akun dua langkah. Dilewati tanpa OTP `echo` |
+| `otp-daily-cap.mjs` | Layar OTP saat plafon harian tercapai (503 `otp_daily_cap`): pesan server + "besok", tombol kirim/kirim ulang nonaktif sesuai `Retry-After`, aktif lagi setelahnya. Hanya di depan `mock-api.mjs`, selain itu dilewati |
 | `mock-api.mjs` | Tiruan endpoint akun v2 di depan API demo (v1) untuk menguji dua suite di atas sebelum ada build integrasi. Lihat komentar di kepala berkas |
 | `run.mjs` | Menjalankan semuanya berurutan, reset data demo sebelum/sesudah, keluar 1 kalau ada yang gagal |
 
@@ -43,4 +44,9 @@ node mock-api.mjs 3403 https://sewain-staging.hallojanu.me &          # MOCK_DEM
 NEXT_PUBLIC_API_URL=http://localhost:3403 pnpm exec next dev -p 3402   # dari akar repo
 node auth-otp.mjs http://localhost:3402 http://localhost:3403
 node account.mjs http://localhost:3402 http://localhost:3403
+node otp-daily-cap.mjs http://localhost:3402 http://localhost:3403
 ```
+
+Mock juga menyediakan `GET /api/v1/users/{id}` (matikan dengan `POST /__mock/config {"usersEndpoint": false}`). Untuk
+melihat `/u/<id>` benar-benar mengambil dari endpoint itu, jalankan web dev di atas dengan
+`NEXT_PUBLIC_SIMULATE_SCOPED=1`: snapshot lalu hanya memuat profil yang dirujuk.

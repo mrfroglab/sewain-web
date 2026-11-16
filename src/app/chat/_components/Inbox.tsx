@@ -6,6 +6,7 @@ import { useShallow } from "zustand/react/shallow";
 import { ButtonLink } from "@/components/ui/Button";
 import { Container, EmptyState, PageHeader } from "@/components/ui/Layout";
 import { Tabs } from "@/components/ui/Tabs";
+import { useEnsureUsers } from "@/lib/profiles";
 import { useAppStore, useNow } from "@/lib/store";
 import type { User } from "@/lib/types";
 import { InboxRow } from "./InboxRow";
@@ -17,6 +18,7 @@ export function Inbox({ user }: { user: User }) {
   const now = useNow();
   const data = useAppStore(useShallow((s) => ({ bookings: s.bookings, messages: s.messages, listings: s.listings, users: s.users, chatReads: s.chatReads })));
   const threads = useMemo(() => buildThreads(data, user.id), [data, user.id]);
+  useEnsureUsers(threads.map((t) => (t.role === "penyewa" ? t.booking.providerId : t.booking.renterId)));
   const [filter, setFilter] = useState<Filter>("semua");
 
   if (user.role === "admin")

@@ -10,6 +10,7 @@ import { useAppConfig } from "@/lib/config";
 import type { SessionTransport } from "@/lib/session";
 import { toast } from "@/lib/toast";
 import { formatPhone } from "./helpers";
+import { DailyCapNotice, noteDailyCap, useActiveDailyCap } from "./otpDailyCap";
 import { OtpBoxes } from "./OtpStep";
 
 const LENGTH = 6;
@@ -54,6 +55,7 @@ export function RealOtpStep({
   const [resending, setResending] = useState(false);
   const [left, setLeft] = useState(Math.max(0, Math.round(challenge.resendAfter ?? 60)));
   const busyRef = useRef(false);
+  const cap = useActiveDailyCap();
 
   useEffect(() => {
     if (left <= 0) return;
@@ -86,6 +88,8 @@ export function RealOtpStep({
     setResending(true);
     const r = await requestOtp(phone);
     setResending(false);
+    const capped = noteDailyCap(r);
+    if (capped) return setLeft(Math.max(1, Math.ceil((capped.until - Date.now()) / 1000)));
     if (!r.body.ok) {
       if (r.body.retryAfter) setLeft(Math.round(r.body.retryAfter));
       return toast(r.body.error ?? "Gagal mengirim ulang kode.", "error");
@@ -98,7 +102,8 @@ export function RealOtpStep({
   };
 
   const via = current.channel === "zenziva" ? "WhatsApp atau SMS" : "WhatsApp/SMS";
-  const mm = Math.floor(left / 60);
+  const hh = Math.floor(left / 3600);
+  const mm = hh ? String(Math.floor((left % 3600) / 60)).padStart(2, "0") : String(Math.floor(left / 60));
   const ss = String(left % 60).padStart(2, "0");
 
   return (
@@ -140,11 +145,17 @@ export function RealOtpStep({
         </Button>
       </form>
 
+      {cap && <DailyCapNotice cap={cap} className="mt-4" />}
       <p className="mt-4 text-center text-body-sm text-smoke" aria-live="polite">
-        {left > 0 ? (
+        {cap ? (
+          <button type="button" disabled className="inline-flex h-9 items-center rounded-control px-3 font-semibold text-ink underline underline-offset-4 disabled:opacity-50">
+            Kirim ulang kode
+          </button>
+        ) : left > 0 ? (
           <>
             Tidak menerima kode? Kirim ulang dalam{" "}
             <span className="font-semibold tabular-nums text-ink">
+              {hh ? `${hh}:` : ""}
               {mm}:{ss}
             </span>
           </>

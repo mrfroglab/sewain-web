@@ -39,6 +39,7 @@ import type {
   PhotoRecord,
   ProposalType,
   Report,
+  Review,
   SearchPrefs,
   StoreInfo,
   User,
@@ -995,8 +996,41 @@ function applyServerState(raw: ServerState) {
   // Demo clock follows the server: its offset plus the skew between the two clocks.
   data.clockOffset = s.clockOffset + (s.serverNow - Date.now());
   data.seeded = true;
+  // Public profiles fetched one by one (GET /api/v1/users/{id}) stay available: a scoped snapshot only carries the
+  // users it refers to. The snapshot's own copy always wins.
+  if (data.users && remoteUsers.size) {
+    const have = new Set(data.users.map((u) => u.id));
+    const extra = [...remoteUsers.values()].filter((u) => !have.has(u.id));
+    if (extra.length) data.users = [...data.users, ...extra];
+  }
   useAppStore.setState(data);
   useApiStatus.setState({ lastSync: Date.now() });
+}
+
+/** Profiles that came from GET /api/v1/users/{id}, kept across snapshots (see applyServerState). */
+const remoteUsers = new Map<ID, User>();
+
+/**
+ * Merge one public profile response into the store without overwriting snapshot data: the user is added (or a
+ * previously fetched copy refreshed) only when the snapshot does not carry them; listings and reviews only when
+ * their id is not in the store yet.
+ */
+export function mergeRemoteProfile(p: { user: User; listings?: Listing[]; reviews?: Review[] }) {
+  const previous = remoteUsers.get(p.user.id);
+  remoteUsers.set(p.user.id, p.user);
+  useAppStore.setState((s) => {
+    const patch: Partial<DataState> = {};
+    const i = s.users.findIndex((u) => u.id === p.user.id);
+    if (i < 0) patch.users = [...s.users, p.user];
+    else if (previous && s.users[i] === previous) patch.users = s.users.map((u, j) => (j === i ? p.user : u));
+    const listingIds = new Set(s.listings.map((l) => l.id));
+    const newListings = (p.listings ?? []).filter((l) => !listingIds.has(l.id));
+    if (newListings.length) patch.listings = [...s.listings, ...newListings];
+    const reviewIds = new Set(s.reviews.map((r) => r.id));
+    const newReviews = (p.reviews ?? []).filter((r) => !reviewIds.has(r.id));
+    if (newReviews.length) patch.reviews = [...s.reviews, ...newReviews];
+    return patch;
+  });
 }
 
 /** Fetch the latest snapshot, but never while our own commands are queued (avoids flicker back to old state). */

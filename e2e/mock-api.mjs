@@ -5,13 +5,16 @@
 //   MOCK_DEMO_MODE=false   config.demoMode (default true; false = production-like cookie sessions, no persona picker)
 //   MOCK_OTP=echo|demo     config.auth.otpProvider (default echo)
 //   MOCK_RESEND=60         seconds of the OTP resend countdown
+//   MOCK_DAILY_CAP=0       > 0: every OTP request answers 503 otp_daily_cap with Retry-After = this many seconds
 //
 // Implemented here, following sewain-api docs/integration/auth.md + notify.md and the integrate-v2 handlers:
 //   GET /api/v1/config, POST /api/v1/auth/otp/request|verify, POST /api/v1/auth/logout, GET /api/v1/auth/me,
 //   GET/DELETE /api/v1/auth/sessions[/{id}], POST /api/v1/kyc/submissions, GET /api/v1/kyc/status,
 //   GET /api/v1/admin/kyc[/{id}[/files/{kind}]], POST /api/v1/admin/kyc/{id}/decision, GET /api/v1/push/vapid-key,
-//   POST/DELETE /api/v1/push/subscriptions, GET/PUT /api/v1/me/notification-prefs, GET /api/v1/me/export, DELETE /api/v1/me
-// Mock-only: GET /__mock/audit (KYC file reads), POST /__mock/config ({demoMode, otpProvider}).
+//   POST/DELETE /api/v1/push/subscriptions, GET/PUT /api/v1/me/notification-prefs, GET /api/v1/me/export, DELETE /api/v1/me,
+//   GET /api/v1/users/{id} (public profile + active listings + visible reviews; worker `polish`)
+// Mock-only: GET /__mock/audit (KYC file reads), POST /__mock/config ({demoMode, otpProvider, resend, dailyCap,
+// usersEndpoint}). `usersEndpoint:false` answers 404 like a server without GET /api/v1/users/{id}.
 // Everything else (state, actions, photos, search, events WebSocket, demo-login) goes to the upstream API with the
 // session translated to its bearer token. Accounts are real upstream accounts (registerUser + demo-login), so the
 // rest of the app works on them unchanged.
@@ -29,8 +32,10 @@ const upstream = (process.argv[3] ?? "https://sewain-staging.hallojanu.me").repl
 const config = {
   demoMode: (process.env.MOCK_DEMO_MODE ?? "true") !== "false",
   otpProvider: process.env.MOCK_OTP ?? "echo",
+  resend: Number(process.env.MOCK_RESEND ?? 60),
+  dailyCap: Number(process.env.MOCK_DAILY_CAP ?? 0),
+  usersEndpoint: true,
 };
-const RESEND = Number(process.env.MOCK_RESEND ?? 60);
 
 const { publicKey } = generateKeyPairSync("ec", { namedCurve: "prime256v1" });
 const VAPID = publicKey.export({ format: "jwk" });
@@ -131,7 +136,7 @@ function cors(req, res) {
   }
   res.setHeader("Access-Control-Allow-Headers", "Authorization, Content-Type, Idempotency-Key, If-None-Match");
   res.setHeader("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS, HEAD");
-  res.setHeader("Access-Control-Expose-Headers", "ETag, Idempotency-Replayed, X-Original-SHA256, X-Content-SHA256");
+  res.setHeader("Access-Control-Expose-Headers", "ETag, Retry-After, Idempotency-Replayed, X-Original-SHA256, X-Content-SHA256");
 }
 
 function send(res, status, body, headers = {}) {
@@ -224,6 +229,11 @@ async function handle(req, res) {
   if (route === "POST /api/v1/auth/otp/request") {
     const phone = normalizePhone(json(await readBody(req)).phone);
     if (!phone) return err(res, 400, "Nomor HP tidak valid. Pakai nomor seluler Indonesia, mis. 0812 3456 7890.");
+    if (config.dailyCap > 0) {
+      // sewain-api internal/auth/otp.go: server-wide cap per WIB day, Retry-After until 00.00 WIB.
+      const secs = Math.ceil(config.dailyCap);
+      return err(res, 503, "Maaf, pengiriman kode OTP hari ini sudah mencapai batas. Coba lagi besok, ya. Kalau mendesak, hubungi admin Sewain.", { code: "otp_daily_cap", retryAfter: secs }, { "Retry-After": String(secs) });
+    }
     const prev = challenges.get(phone);
     if (prev && prev.resendAt > Date.now()) {
       const wait = Math.ceil((prev.resendAt - Date.now()) / 1000);
@@ -231,8 +241,8 @@ async function handle(req, res) {
     }
     const code = config.otpProvider === "demo" ? "123456" : String(Math.floor(Math.random() * 1e6)).padStart(6, "0");
     const expiresAt = new Date(Date.now() + 5 * 60e3).toISOString();
-    challenges.set(phone, { code, expiresAt, resendAt: Date.now() + RESEND * 1000, tries: 0 });
-    return send(res, 200, { ok: true, phone, expiresAt, resendAfter: RESEND, channel: config.otpProvider, devCode: code });
+    challenges.set(phone, { code, expiresAt, resendAt: Date.now() + config.resend * 1000, tries: 0 });
+    return send(res, 200, { ok: true, phone, expiresAt, resendAfter: config.resend, channel: config.otpProvider, devCode: code });
   }
   if (route === "POST /api/v1/auth/otp/verify") {
     const b = json(await readBody(req));
@@ -280,6 +290,40 @@ async function handle(req, res) {
       newSession(r.body.token, r.body.userId ?? me.body.user?.id, me.body.user?.role === "admin" ? "admin" : "user", req);
     }
     return send(res, r.status, r.body);
+  }
+
+  /* ---- public profile (GET /api/v1/users/{id}) */
+  const um = /^GET \/api\/v1\/users\/([^/]+)$/.exec(route);
+  if (um) {
+    if (!config.usersEndpoint) return err(res, 404, "Tidak ditemukan.");
+    const id = decodeURIComponent(um[1]);
+    const state = await fullState();
+    const u = state.users.find((x) => x.id === id && !deleted.has(x.id));
+    if (!u) return err(res, 404, "Pengguna tidak ditemukan.");
+    const nowMs = Date.now() + (state.clockOffset ?? 0);
+    const visible = (r) => (r.visibleAt != null ? nowMs >= r.visibleAt : nowMs - r.createdAt >= 7 * 864e5 || state.reviews.some((o) => o.bookingId === r.bookingId && o.fromId !== r.fromId));
+    const user = {
+      id: u.id,
+      name: String(u.name ?? "").trim().split(/\s+/)[0] ?? "",
+      nickname: u.nickname,
+      role: u.role,
+      accountType: u.accountType,
+      store: u.store ? { name: u.store.name, areaId: u.store.areaId, hours: u.store.hours } : undefined,
+      verification: { status: u.verification?.status ?? "belum" },
+      areaId: u.areaId,
+      campus: u.campus,
+      studentVerified: u.studentVerified,
+      earlyLender: u.earlyLender,
+      bio: u.bio,
+      joinedAt: u.joinedAt,
+      status: u.status,
+      baseRating: u.baseRating,
+      baseRatingCount: u.baseRatingCount,
+      demo: config.demoMode ? u.demo : undefined,
+    };
+    const listings = state.listings.filter((l) => l.ownerId === id && l.status === "aktif");
+    const reviews = state.reviews.filter((r) => r.toId === id && visible(r));
+    return send(res, 200, { ok: true, user, listings, reviews });
   }
 
   /* ---- everything below knows the viewer */

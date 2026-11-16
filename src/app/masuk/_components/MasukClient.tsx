@@ -15,6 +15,7 @@ import type { User } from "@/lib/types";
 import { DemoAccounts } from "./DemoAccounts";
 import { safeNext } from "./helpers";
 import { OtpStep } from "./OtpStep";
+import { noteDailyCap } from "./otpDailyCap";
 import { PhoneStep } from "./PhoneStep";
 import { ConsentStep, RealOtpStep, type VerifiedLogin } from "./RealOtpStep";
 import { RegisterStep } from "./RegisterStep";
@@ -77,6 +78,8 @@ function MasukFlow({ next, startSwitching }: { next: string | null; startSwitchi
   /** Real OTP: ask the server to send a code. Returns the error to show under the phone field. */
   const sendCode = async (phone: string): Promise<string | null> => {
     const r = await requestOtp(phone);
+    // Daily cap: PhoneStep shows the notice and keeps the button disabled (no field error).
+    if (noteDailyCap(r)) return null;
     if (!r.body.ok) return r.body.error ?? "Gagal mengirim kode OTP.";
     setStep({ name: "realOtp", phone, challenge: r.body });
     return null;

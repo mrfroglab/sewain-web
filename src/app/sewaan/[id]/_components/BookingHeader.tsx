@@ -9,6 +9,7 @@ import { cn } from "@/components/ui/cn";
 import { Stars } from "@/components/ui/Stars";
 import { StatusBadge } from "@/components/ui/StatusBadge";
 import { formatDateRange, rupiah } from "@/lib/format";
+import { useEnsureUsers } from "@/lib/profiles";
 import { isVerified, publicName, unreadMessages, userRating } from "@/lib/selectors";
 import { useAppStore } from "@/lib/store";
 import type { User } from "@/lib/types";
@@ -19,6 +20,7 @@ const ROLE_CHIP = { penyewa: "Kamu penyewa", penyedia: "Kamu penyedia", admin: "
 /** Listing + booking identity, status, role and the other party (+ chat). */
 export function BookingHeader({ view, className }: { view: BookingView; className?: string }) {
   const { b, listing, role, user, renter, provider } = view;
+  useEnsureUsers([b.renterId, b.providerId]);
   const unread = useAppStore((s) => (role === "admin" ? 0 : unreadMessages(s, user.id, b.id)));
   const title = listing?.title ?? b.agreement.listingTitle;
   const other = otherParty(view);

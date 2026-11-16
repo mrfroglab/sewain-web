@@ -10,6 +10,7 @@ import { cn } from "@/components/ui/cn";
 import { areaName } from "@/lib/data/areas";
 import { CATEGORY_BY_ID } from "@/lib/data/categories";
 import { formatDate, formatDateRange, formatDistance, relativeTime, rupiah } from "@/lib/format";
+import { useEnsureUsers } from "@/lib/profiles";
 import { findUser, isVerified, providerLabel, publicName } from "@/lib/selectors";
 import { useAppStore } from "@/lib/store";
 import { toastResult } from "@/lib/toast";
@@ -50,6 +51,7 @@ export function WantedCard({ post, distanceKm, now, user, onOffer }: { post: Wan
   const listings = useAppStore((s) => s.listings);
   const closeWanted = useAppStore((s) => s.closeWanted);
   const requester = findUser({ users }, post.requesterId);
+  useEnsureUsers([post.requesterId, ...post.offers.map((o) => o.providerId)]);
   const name = publicName(requester);
   const isMine = !!user && user.id === post.requesterId;
   const offeredByMe = !!user && post.offers.some((o) => o.providerId === user.id);

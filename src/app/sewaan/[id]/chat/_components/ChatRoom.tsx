@@ -5,6 +5,7 @@ import { useEffect, useLayoutEffect, useMemo, useState, type CSSProperties, type
 import { useShallow } from "zustand/react/shallow";
 import { ButtonLink } from "@/components/ui/Button";
 import { Container, EmptyState } from "@/components/ui/Layout";
+import { useEnsureUsers } from "@/lib/profiles";
 import { bookingRole, publicName, unreadMessages } from "@/lib/selectors";
 import { useAppStore, useNow } from "@/lib/store";
 import type { ID, User } from "@/lib/types";
@@ -71,6 +72,7 @@ export function ChatRoom({ id, user }: { id: ID; user: User }) {
   const listing = useAppStore((s) => (booking ? s.listings.find((l) => l.id === booking.listingId) : undefined));
   const renter = useAppStore((s) => (booking ? s.users.find((u) => u.id === booking.renterId) : undefined));
   const provider = useAppStore((s) => (booking ? s.users.find((u) => u.id === booking.providerId) : undefined));
+  useEnsureUsers([booking?.renterId, booking?.providerId]);
   const raw = useAppStore(useShallow((s) => s.messages.filter((m) => m.bookingId === id)));
   const messages = useMemo(() => [...raw].sort((a, b) => a.at - b.at), [raw]);
   const role = booking ? bookingRole(booking, user.id) : null;

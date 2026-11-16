@@ -10,6 +10,7 @@ import { publicName } from "@/lib/selectors";
 import { useAppStore } from "@/lib/store";
 import type { User } from "@/lib/types";
 import { formatPhone, isValidPhone, normalizePhone, randomPhone } from "./helpers";
+import { DailyCapNotice, useActiveDailyCap } from "./otpDailyCap";
 
 /** Step 1 of "Masuk / daftar dengan nomor HP" (FR-A1). */
 export function PhoneStep({
@@ -31,10 +32,12 @@ export function PhoneStep({
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const sample = useAppStore((s) => s.users.find((u) => u.id === "u-raka"));
+  const cap = useActiveDailyCap();
+  const blocked = real && !!cap;
 
   const submit = async (e: FormEvent) => {
     e.preventDefault();
-    if (busy) return;
+    if (busy || blocked) return;
     const phone = normalizePhone(value);
     if (!isValidPhone(phone)) return setError("Nomor HP belum benar. Contoh: 0812 3456 7890.");
     setError(null);
@@ -80,7 +83,8 @@ export function PhoneStep({
           help={real ? "Kode dikirim lewat WhatsApp atau SMS. Nomor baru otomatis lanjut ke pendaftaran." : "Nomor baru otomatis lanjut ke pendaftaran."}
           className="[&_input]:text-body-lg"
         />
-        <Button type="submit" size="lg" block className="mt-4" loading={busy}>
+        {blocked && cap && <DailyCapNotice cap={cap} className="mt-4" />}
+        <Button type="submit" size="lg" block className="mt-4" loading={busy} disabled={blocked}>
           {busy ? "Mengirim…" : "Kirim OTP"} <ArrowRight className="size-4" />
         </Button>
       </form>
