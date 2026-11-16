@@ -171,6 +171,14 @@ export interface CallOptions {
   quiet401?: boolean;
 }
 
+/** `Retry-After` as seconds (delta-seconds or an HTTP date); undefined when absent or unreadable. */
+export function parseRetryAfter(h: string | null): number | undefined {
+  if (!h) return undefined;
+  if (/^\d+$/.test(h.trim())) return Number(h.trim());
+  const at = Date.parse(h);
+  return Number.isNaN(at) ? undefined : Math.max(0, Math.ceil((at - Date.now()) / 1000));
+}
+
 /** One call to a v2 JSON endpoint. Never throws: network failures come back as status 0 with a readable error. */
 export async function apiCall<T = object>(path: string, opts: CallOptions = {}): Promise<ApiResult<T>> {
   const headers = new Headers();
@@ -197,6 +205,7 @@ export async function apiCall<T = object>(path: string, opts: CallOptions = {}):
     if (!res.ok) {
       out.ok = false;
       out.error ??= res.status === 404 ? "Fitur ini belum tersedia di server." : `Server menolak permintaan (HTTP ${res.status}).`;
+      out.retryAfter ??= parseRetryAfter(res.headers.get("Retry-After"));
     }
     if (res.status === 401 && auth && !opts.quiet401) unauthorizedHandler();
     return { status: res.status, body: out };
