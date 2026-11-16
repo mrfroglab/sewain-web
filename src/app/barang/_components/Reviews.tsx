@@ -6,6 +6,7 @@ import { Avatar } from "@/components/ui/Avatar";
 import { Button } from "@/components/ui/Button";
 import { Stars } from "@/components/ui/Stars";
 import { formatDate, isoDate } from "@/lib/format";
+import { useEnsureUsers } from "@/lib/profiles";
 import { publicName, type RatingSummary } from "@/lib/selectors";
 import type { Review, User } from "@/lib/types";
 
@@ -96,6 +97,8 @@ export function ReviewsBlock({
 }) {
   const [all, setAll] = useState(false);
   const shown = all ? reviews : reviews.slice(0, 4);
+  // Reviewers the snapshot does not carry (scoped v2): fetch their public profile for name + avatar.
+  useEnsureUsers(shown.map((r) => r.fromId));
   const distribution = ratingDistribution(base, reviews);
   return (
     <div className="grid gap-6 lg:grid-cols-[240px_minmax(0,1fr)] lg:gap-10">

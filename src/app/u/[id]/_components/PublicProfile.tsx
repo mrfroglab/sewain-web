@@ -1,6 +1,6 @@
 "use client";
 
-import { BadgeCheck, Clock, Flag, GraduationCap, MapPin, Pencil, Sprout, Store, UserX } from "lucide-react";
+import { BadgeCheck, Clock, Flag, GraduationCap, MapPin, Pencil, RefreshCw, Sprout, Store, UserX } from "lucide-react";
 import { useMemo, useState } from "react";
 import { useShallow } from "zustand/react/shallow";
 import { ReportSheet } from "@/app/barang/_components/ReportSheet";
@@ -11,15 +11,20 @@ import { Avatar } from "@/components/ui/Avatar";
 import { Badge } from "@/components/ui/Badge";
 import { Button, ButtonLink } from "@/components/ui/Button";
 import { Ready } from "@/components/ui/Gate";
-import { Container, EmptyState, Notice, SectionHeading } from "@/components/ui/Layout";
+import { Container, EmptyState, Notice, PageSkeleton, SectionHeading } from "@/components/ui/Layout";
 import { Stars } from "@/components/ui/Stars";
 import { areaName } from "@/lib/data/areas";
+import { useApiStatus } from "@/lib/api";
 import { number } from "@/lib/format";
+import { retryProfile, usePublicProfile } from "@/lib/profiles";
 import { distanceTo, findUser, isVerified, listingRating, liveListings, providerLabel, publicName, publicStrikes, userRating, userStats, visibleReviews } from "@/lib/selectors";
 import { useCurrentUser } from "@/lib/session";
 import { useAppStore, useNow } from "@/lib/store";
 
-/** /u/[id] — public profile. Shows only the public name / store name and "Terverifikasi" (FR-A5): never full name, phone, or NIK. */
+/**
+ * /u/[id] — public profile. Shows only the public name / store name and "Terverifikasi" (FR-A5): never full name,
+ * phone, or NIK. A user the snapshot does not carry (scoped v2 snapshot) comes from GET /api/v1/users/{id}.
+ */
 export function PublicProfile({ id }: { id: string }) {
   return (
     <Ready>
@@ -32,9 +37,24 @@ function ProfileBody({ id }: { id: string }) {
   const viewer = useCurrentUser();
   const now = useNow();
   const [reporting, setReporting] = useState(false);
-  const data = useAppStore(
+  const online = useApiStatus((s) => s.status === "online");
+  const remote = usePublicProfile(id);
+  const snapshot = useAppStore(
     useShallow((s) => ({ listings: s.listings, users: s.users, reviews: s.reviews, bookings: s.bookings, disputes: s.disputes, search: s.search, scope: s.scope, viewerId: s.viewerId })),
   );
+  // Snapshot data wins; the profile response only adds what the snapshot does not carry.
+  const data = useMemo(() => {
+    if (remote?.status !== "ok" || !remote.user) return snapshot;
+    const user = remote.user;
+    const listingIds = new Set(snapshot.listings.map((l) => l.id));
+    const reviewIds = new Set(snapshot.reviews.map((r) => r.id));
+    return {
+      ...snapshot,
+      users: snapshot.users.some((u) => u.id === user.id) ? snapshot.users : [...snapshot.users, user],
+      listings: [...snapshot.listings, ...remote.listings.filter((l) => !listingIds.has(l.id))],
+      reviews: [...snapshot.reviews, ...remote.reviews.filter((r) => !reviewIds.has(r.id))],
+    };
+  }, [snapshot, remote]);
   const person = findUser(data, id);
 
   const view = useMemo(() => {
@@ -53,6 +73,25 @@ function ProfileBody({ id }: { id: string }) {
       reviews: visibleReviews(data, now, (r) => r.toId === person.id),
     };
   }, [person, data, now]);
+
+  if (!person && online && (!remote || remote.status === "loading")) return <PageSkeleton />;
+
+  if (!person && remote?.status === "error") {
+    return (
+      <Container className="py-10">
+        <EmptyState
+          icon={<UserX className="size-5" />}
+          title="Profil belum bisa dimuat"
+          description={remote.error ?? "Server sedang sibuk. Coba lagi sebentar lagi."}
+          action={
+            <Button variant="secondary" onClick={() => void retryProfile(id)}>
+              <RefreshCw className="size-4" /> Coba lagi
+            </Button>
+          }
+        />
+      </Container>
+    );
+  }
 
   if (!person || !view) {
     return (

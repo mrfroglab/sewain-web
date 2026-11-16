@@ -12,6 +12,7 @@ import { AREA_BY_ID } from "@/lib/data/areas";
 import { CATEGORY_BY_ID } from "@/lib/data/categories";
 import { isoDate } from "@/lib/format";
 import { isHighValue } from "@/lib/pricing";
+import { useEnsureUsers } from "@/lib/profiles";
 import { distanceTo, findUser, listingRating, liveListings, trustScore, userRating, visibleReviews, type ListingHit } from "@/lib/selectors";
 import { useCurrentUser } from "@/lib/session";
 import { useAppStore, useNow } from "@/lib/store";
@@ -47,6 +48,7 @@ function DetailBody({ id }: { id: string }) {
     })),
   );
   const listing = data.listings.find((l) => l.id === id);
+  useEnsureUsers([listing?.ownerId]);
 
   const view = useMemo(() => {
     if (!listing) return null;
