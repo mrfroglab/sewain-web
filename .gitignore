@@ -47,3 +47,6 @@ dist/
 !.env.example
 __pycache__/
 .venv/
+
+# Suite regresi demo (paket terpisah)
+/e2e/node_modules

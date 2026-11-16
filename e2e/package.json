@@ -1,0 +1,12 @@
+{
+  "name": "sewain-e2e",
+  "private": true,
+  "type": "module",
+  "description": "Suite regresi demo Sewain (Playwright). Terpisah dari aplikasi supaya build web tidak ikut membawa Playwright.",
+  "scripts": {
+    "test": "node run.mjs"
+  },
+  "dependencies": {
+    "playwright": "1.65.0"
+  }
+}

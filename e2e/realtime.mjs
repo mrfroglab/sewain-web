@@ -1,0 +1,15 @@
+import { chromium } from "playwright";
+const base = process.argv[2];
+const browser = await chromium.launch({ ...(process.env.CHROMIUM_PATH ? { executablePath: process.env.CHROMIUM_PATH } : {}), headless: true });
+const mk = async (id) => { const c = await browser.newContext({ viewport: { width: 390, height: 844 } }); const p = await c.newPage(); await p.addInitScript((u) => sessionStorage.setItem("sewain-session", JSON.stringify({ state: { userId: u }, version: 0 })), id); return p; };
+const P = await mk("u-bayu"), R = await mk("u-raka");
+await P.goto(base + "/notifikasi", { waitUntil: "load" });
+await R.goto(base + "/sewaan/b-requested/chat", { waitUntil: "load" });
+await P.waitForTimeout(2500); await R.waitForTimeout(1500);
+const text = "Realtime test " + Date.now().toString(36);
+await R.getByPlaceholder("Tulis pesan…").fill(text);
+const t0 = Date.now();
+await R.getByRole("button", { name: "Kirim pesan" }).click();
+await P.getByText(text.slice(0, 30)).first().waitFor({ timeout: 10000 });
+console.log(`✓ notifikasi muncul di perangkat Mas Bayu tanpa reload dalam ${Date.now() - t0} ms`);
+await browser.close();
